@@ -74,7 +74,8 @@ class CoffeeManager {
                     website: tags.website || tags['contact:website'] || null,
                     address: this.buildAddress(tags),
                     wheelchair: tags.wheelchair || null,
-                    isSunny: null
+                    isSunny: null,
+                    sunnyAt: null
                 };
             });
 
@@ -120,6 +121,37 @@ class CoffeeManager {
                 return a.isSunny ? -1 : 1;
             }
             return a.distance - b.distance;
+        });
+    }
+
+    predictSunnyTimes(sunManager, sceneManager) {
+        const now = new Date();
+        const sunset = sunManager.getSunTimes().sunset;
+
+        this.coffeeShops.forEach(shop => {
+            if (shop.isSunny) {
+                shop.sunnyAt = null;
+                return;
+            }
+
+            shop.sunnyAt = null;
+
+            // Check every 15 minutes from now until sunset
+            for (let mins = 15; mins <= 480; mins += 15) {
+                const futureTime = new Date(now.getTime() + mins * 60000);
+                if (futureTime > sunset) break;
+
+                const sunPos = SunCalc.getPosition(futureTime, this.userLat, this.userLon);
+                if (sunPos.altitude <= 0) continue;
+
+                const sunVector = sunManager.sunPositionToVector(sunPos.altitude, sunPos.azimuth);
+                const isSunny = sceneManager.checkSunAtPosition(shop.x, shop.z, sunVector);
+
+                if (isSunny) {
+                    shop.sunnyAt = futureTime;
+                    break;
+                }
+            }
         });
     }
 }

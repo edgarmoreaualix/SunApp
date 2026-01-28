@@ -321,6 +321,7 @@
             );
 
             sceneManager.updateCoffeeMarkerColors(sunVector);
+            coffeeManager.predictSunnyTimes(sunManager, sceneManager);
             updateSunInfo();
             renderCoffeeList();
         }
@@ -336,7 +337,13 @@
                 return;
             }
 
-            listEl.innerHTML = shops.map(shop => `
+            listEl.innerHTML = shops.map(shop => {
+                let statusText = shop.isSunny ? 'Sunny' : 'Shaded';
+                if (!shop.isSunny && shop.sunnyAt) {
+                    const time = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                    statusText = `Sun at ${time}`;
+                }
+                return `
                 <div class="coffee-item ${shop.id === selectedShopId ? 'selected' : ''}"
                      onclick="selectCoffee(${shop.id})">
                     <div class="coffee-icon ${shop.isSunny ? 'sunny' : 'shaded'}">
@@ -346,14 +353,14 @@
                         <div class="coffee-name">${shop.name}</div>
                         <div class="coffee-meta">
                             <span class="${shop.isSunny ? 'sunny-tag' : 'shaded-tag'}">
-                                ${shop.isSunny ? 'Sunny' : 'Shaded'}
+                                ${statusText}
                             </span>
                             ${shop.outdoor ? ' · Terrace' : ''}
                         </div>
                     </div>
                     <div class="coffee-distance">${shop.distance}m</div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         function selectCoffee(id) {
@@ -364,10 +371,17 @@
             document.getElementById('detail-name').textContent = shop.name;
 
             let content = '';
+            let sunStatus = shop.isSunny ? '☀️ Currently sunny' : '🌥️ Currently shaded';
+            if (!shop.isSunny && shop.sunnyAt) {
+                const time = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                sunStatus = `🌥️ Shaded now, sunny at ${time}`;
+            } else if (!shop.isSunny) {
+                sunStatus = '🌥️ Shaded until sunset';
+            }
             content += `<div class="detail-row">
                 <span class="detail-label">Status</span>
                 <span class="detail-value ${shop.isSunny ? 'sunny-tag' : 'shaded-tag'}">
-                    ${shop.isSunny ? '☀️ Currently sunny' : '🌥️ Currently shaded'}
+                    ${sunStatus}
                 </span>
             </div>`;
             content += `<div class="detail-row">
@@ -451,6 +465,9 @@
 
                 const buildings = parser.parse(osmData);
                 sceneManager.addBuildings(buildings);
+
+                // Add user location marker
+                sceneManager.addUserMarker();
 
                 // Load satellite imagery
                 sceneManager.loadSatelliteImagery(LAT, LON, RADIUS);

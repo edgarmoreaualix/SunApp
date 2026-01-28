@@ -9,6 +9,7 @@ class SceneManager {
         this.controls = null;
         this.buildingMeshes = [];
         this.coffeeMarkers = [];
+        this.userMarker = null;
         this.raycaster = new THREE.Raycaster();
 
         this.init();
@@ -254,6 +255,47 @@ class SceneManager {
             if (marker.material) marker.material.dispose();
         });
         this.coffeeMarkers = [];
+
+        if (this.userMarker) {
+            this.scene.remove(this.userMarker);
+            this.userMarker = null;
+        }
+    }
+
+    addUserMarker() {
+        if (this.userMarker) {
+            this.scene.remove(this.userMarker);
+        }
+
+        const group = new THREE.Group();
+
+        // Blue circle on ground
+        const ringGeometry = new THREE.RingGeometry(8, 12, 32);
+        const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x3b82f6, side: THREE.DoubleSide });
+        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.5;
+        group.add(ring);
+
+        // Inner dot
+        const dotGeometry = new THREE.CircleGeometry(6, 32);
+        const dotMaterial = new THREE.MeshBasicMaterial({ color: 0x60a5fa });
+        const dot = new THREE.Mesh(dotGeometry, dotMaterial);
+        dot.rotation.x = -Math.PI / 2;
+        dot.position.y = 0.6;
+        group.add(dot);
+
+        // Pulsing outer ring (will be animated)
+        const pulseGeometry = new THREE.RingGeometry(12, 14, 32);
+        const pulseMaterial = new THREE.MeshBasicMaterial({ color: 0x3b82f6, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+        this.pulseRing = new THREE.Mesh(pulseGeometry, pulseMaterial);
+        this.pulseRing.rotation.x = -Math.PI / 2;
+        this.pulseRing.position.y = 0.4;
+        group.add(this.pulseRing);
+
+        group.position.set(0, 0, 0);
+        this.userMarker = group;
+        this.scene.add(this.userMarker);
     }
 
     addCoffeeMarkers(coffeeShops) {
