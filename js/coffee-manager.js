@@ -4,9 +4,37 @@ class CoffeeManager {
     constructor(parser) {
         this.parser = parser;
         this.coffeeShops = [];
+        this.userLat = null;
+        this.userLon = null;
+    }
+
+    setUserLocation(lat, lon) {
+        this.userLat = lat;
+        this.userLon = lon;
+        this.updateDistances();
+    }
+
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return Math.round(R * c);
+    }
+
+    updateDistances() {
+        if (this.userLat === null) return;
+        this.coffeeShops.forEach(shop => {
+            shop.distance = this.calculateDistance(this.userLat, this.userLon, shop.lat, shop.lon);
+        });
     }
 
     async fetchCoffeeShops(lat, lon, radius = 500) {
+        this.setUserLocation(lat, lon);
+
         const query = `
             [out:json][timeout:25];
             (
@@ -25,19 +53,27 @@ class CoffeeManager {
             const data = await response.json();
 
             this.coffeeShops = data.elements.map(el => {
-                const lat = el.lat || el.center?.lat;
-                const lon = el.lon || el.center?.lon;
-                const pos = this.parser.latLonToMeters(lat, lon);
+                const shopLat = el.lat || el.center?.lat;
+                const shopLon = el.lon || el.center?.lon;
+                const pos = this.parser.latLonToMeters(shopLat, shopLon);
+                const tags = el.tags || {};
 
                 return {
                     id: el.id,
-                    name: el.tags?.name || 'Unnamed Cafe',
-                    lat,
-                    lon,
+                    name: tags.name || 'Unnamed Cafe',
+                    lat: shopLat,
+                    lon: shopLon,
                     x: pos.x,
                     z: pos.z,
-                    outdoor: el.tags?.outdoor_seating === 'yes',
-                    type: el.tags?.amenity,
+                    distance: this.calculateDistance(lat, lon, shopLat, shopLon),
+                    outdoor: tags.outdoor_seating === 'yes',
+                    type: tags.amenity,
+                    cuisine: tags.cuisine || null,
+                    openingHours: tags.opening_hours || null,
+                    phone: tags.phone || tags['contact:phone'] || null,
+                    website: tags.website || tags['contact:website'] || null,
+                    address: this.buildAddress(tags),
+                    wheelchair: tags.wheelchair || null,
                     isSunny: null
                 };
             });
@@ -49,8 +85,20 @@ class CoffeeManager {
         }
     }
 
+    buildAddress(tags) {
+        const parts = [];
+        if (tags['addr:housenumber']) parts.push(tags['addr:housenumber']);
+        if (tags['addr:street']) parts.push(tags['addr:street']);
+        if (tags['addr:city']) parts.push(tags['addr:city']);
+        return parts.length > 0 ? parts.join(' ') : null;
+    }
+
     getCoffeeShops() {
         return this.coffeeShops;
+    }
+
+    getShopById(id) {
+        return this.coffeeShops.find(s => s.id === id);
     }
 
     updateSunStatus(id, isSunny) {
@@ -64,5 +112,14 @@ class CoffeeManager {
 
     getShadedShops() {
         return this.coffeeShops.filter(s => s.isSunny === false);
+    }
+
+    getShopsSorted() {
+        return [...this.coffeeShops].sort((a, b) => {
+            if (a.isSunny !== b.isSunny) {
+                return a.isSunny ? -1 : 1;
+            }
+            return a.distance - b.distance;
+        });
     }
 }
