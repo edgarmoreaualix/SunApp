@@ -7,8 +7,10 @@ class SceneManager {
         this.camera = null;
         this.renderer = null;
         this.controls = null;
-        this.buildingMeshes = []; // Track all building meshes
-        
+        this.buildingMeshes = [];
+        this.coffeeMarkers = [];
+        this.raycaster = new THREE.Raycaster();
+
         this.init();
     }
 
@@ -99,65 +101,87 @@ class SceneManager {
 
     setupMouseControls() {
         let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
+        let previousPosition = { x: 0, y: 0 };
+        let initialPinchDistance = 0;
         const rotationSpeed = 0.005;
 
-        this.renderer.domElement.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
+        const getPosition = (e) => {
+            if (e.touches) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        };
 
-        this.renderer.domElement.addEventListener('mousemove', (e) => {
-            if (!isDragging) {
-                previousMousePosition = { x: e.clientX, y: e.clientY };
+        const onStart = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                initialPinchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                return;
+            }
+            isDragging = true;
+            previousPosition = getPosition(e);
+        };
+
+        const onMove = (e) => {
+            if (e.touches && e.touches.length === 2) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const delta = (initialPinchDistance - dist) * 0.5;
+                initialPinchDistance = dist;
+                this.zoom(delta);
                 return;
             }
 
-            const deltaX = e.clientX - previousMousePosition.x;
-            const deltaY = e.clientY - previousMousePosition.y;
+            if (!isDragging) return;
 
-            // Rotate camera around origin
-            const radius = Math.sqrt(
-                this.camera.position.x ** 2 + 
-                this.camera.position.z ** 2
-            );
+            const pos = getPosition(e);
+            const deltaX = pos.x - previousPosition.x;
+            const deltaY = pos.y - previousPosition.y;
 
+            const radius = Math.sqrt(this.camera.position.x ** 2 + this.camera.position.z ** 2);
             const currentAngle = Math.atan2(this.camera.position.z, this.camera.position.x);
             const newAngle = currentAngle - deltaX * rotationSpeed;
 
             this.camera.position.x = radius * Math.cos(newAngle);
             this.camera.position.z = radius * Math.sin(newAngle);
-            
-            // Adjust height
             this.camera.position.y = Math.max(10, this.camera.position.y - deltaY * 0.5);
 
             this.camera.lookAt(0, 0, 0);
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        });
+            previousPosition = pos;
+        };
 
-        this.renderer.domElement.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
+        const onEnd = () => { isDragging = false; };
+
+        // Mouse events
+        this.renderer.domElement.addEventListener('mousedown', onStart);
+        this.renderer.domElement.addEventListener('mousemove', onMove);
+        this.renderer.domElement.addEventListener('mouseup', onEnd);
+
+        // Touch events
+        this.renderer.domElement.addEventListener('touchstart', onStart, { passive: true });
+        this.renderer.domElement.addEventListener('touchmove', onMove, { passive: true });
+        this.renderer.domElement.addEventListener('touchend', onEnd);
 
         this.renderer.domElement.addEventListener('wheel', (e) => {
             e.preventDefault();
-            
-            // Zoom in/out
-            const zoomSpeed = 0.1;
-            const delta = e.deltaY * zoomSpeed;
-            
-            const direction = new THREE.Vector3();
-            direction.subVectors(this.camera.position, new THREE.Vector3(0, 0, 0)).normalize();
-            
-            this.camera.position.addScaledVector(direction, delta);
-            
-            // Keep minimum distance
-            const minDistance = 50;
-            const distance = this.camera.position.length();
-            if (distance < minDistance) {
-                this.camera.position.multiplyScalar(minDistance / distance);
-            }
-        });
+            this.zoom(e.deltaY * 0.1);
+        }, { passive: false });
+    }
+
+    zoom(delta) {
+        const direction = new THREE.Vector3();
+        direction.subVectors(this.camera.position, new THREE.Vector3(0, 0, 0)).normalize();
+        this.camera.position.addScaledVector(direction, delta);
+
+        const minDistance = 50;
+        const distance = this.camera.position.length();
+        if (distance < minDistance) {
+            this.camera.position.multiplyScalar(minDistance / distance);
+        }
     }
 
     createBuilding(footprint, height) {
@@ -221,20 +245,62 @@ class SceneManager {
     }
 
     clearBuildings() {
-        console.log(`Clearing ${this.buildingMeshes.length} buildings`);
-        
-        // Remove all building meshes from scene
         this.buildingMeshes.forEach(mesh => {
             this.scene.remove(mesh);
-            // Dispose geometry and material to free memory
             if (mesh.geometry) mesh.geometry.dispose();
             if (mesh.material) mesh.material.dispose();
         });
-        
-        // Clear the array
         this.buildingMeshes = [];
-        
-        console.log('Buildings cleared');
+
+        this.coffeeMarkers.forEach(marker => {
+            this.scene.remove(marker);
+            if (marker.geometry) marker.geometry.dispose();
+            if (marker.material) marker.material.dispose();
+        });
+        this.coffeeMarkers = [];
+    }
+
+    addCoffeeMarkers(coffeeShops) {
+        coffeeShops.forEach(shop => {
+            const geometry = new THREE.CylinderGeometry(3, 3, 15, 8);
+            const material = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
+            const marker = new THREE.Mesh(geometry, material);
+
+            marker.position.set(shop.x, 7.5, shop.z);
+            marker.userData = { shopId: shop.id, shop };
+            marker.castShadow = false;
+            marker.receiveShadow = true;
+
+            this.scene.add(marker);
+            this.coffeeMarkers.push(marker);
+        });
+    }
+
+    checkSunAtPosition(x, z, sunPosition) {
+        const groundPoint = new THREE.Vector3(x, 1, z);
+        const sunDir = new THREE.Vector3(
+            sunPosition.x - groundPoint.x,
+            sunPosition.y - groundPoint.y,
+            sunPosition.z - groundPoint.z
+        ).normalize();
+
+        this.raycaster.set(groundPoint, sunDir);
+        const intersects = this.raycaster.intersectObjects(this.buildingMeshes);
+
+        return intersects.length === 0;
+    }
+
+    updateCoffeeMarkerColors(sunPosition) {
+        this.coffeeMarkers.forEach(marker => {
+            const isSunny = this.checkSunAtPosition(
+                marker.position.x,
+                marker.position.z,
+                sunPosition
+            );
+
+            marker.userData.shop.isSunny = isSunny;
+            marker.material.color.setHex(isSunny ? 0xffd700 : 0x4a5568);
+        });
     }
 
     onWindowResize() {

@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sun Tracker</title>
+    <title>Sunny Coffee</title>
     <style>
+        * { box-sizing: border-box; }
         body {
             margin: 0;
             font-family: system-ui, -apple-system, sans-serif;
             background: #1a1a1a;
             color: white;
             overflow: hidden;
+            touch-action: none;
         }
         #scene-container {
             width: 100vw;
@@ -18,39 +20,65 @@
         }
         #controls {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(30, 41, 59, 0.95);
-            padding: 20px;
-            border-radius: 12px;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(30, 41, 59, 0.98);
+            padding: 16px;
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+            border-radius: 20px 20px 0 0;
             z-index: 100;
-            min-width: 220px;
+            max-height: 40vh;
+            overflow-y: auto;
+        }
+        @media (min-width: 600px) {
+            #controls {
+                top: 20px;
+                left: 20px;
+                right: auto;
+                bottom: auto;
+                max-width: 280px;
+                max-height: none;
+                border-radius: 12px;
+            }
         }
         h3 {
-            margin: 0 0 15px 0;
+            margin: 0 0 12px 0;
             font-size: 18px;
+            text-align: center;
+        }
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
         }
         button {
             background: #3b82f6;
             color: white;
             border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
+            padding: 14px 16px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 15px;
             width: 100%;
             font-weight: 500;
+            -webkit-tap-highlight-color: transparent;
         }
-        button:hover {
-            background: #2563eb;
-        }
+        button:hover { background: #2563eb; }
+        button:active { background: #1d4ed8; transform: scale(0.98); }
+        button:disabled { background: #64748b; }
         #status {
-            margin-top: 12px;
-            padding: 12px;
+            margin-top: 10px;
+            padding: 10px;
             background: rgba(0, 0, 0, 0.3);
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 13px;
-            min-height: 20px;
+            text-align: center;
+        }
+        #sun-info {
+            font-size: 12px;
+            opacity: 0.8;
+            text-align: center;
         }
         .success { color: #4ade80; }
         .error { color: #f87171; }
@@ -60,42 +88,14 @@
     <div id="scene-container"></div>
     
     <div id="controls">
-        <h3>🌞 Sun Tracker</h3>
-        
-        <div style="margin-bottom: 15px;">
-            <label style="font-size: 12px; display: block; margin-bottom: 5px;">City:</label>
-            <select id="city-select" style="width: 100%; padding: 10px; border-radius: 6px; border: none; background: rgba(0,0,0,0.3); color: white; cursor: pointer;" onchange="changeCity()">
-                <option value="47.2184,-1.5536">Nantes, France</option>
-                <option value="25.2048,55.2708">Dubai, UAE 🏙️</option>
-                <option value="40.7128,-74.0060">New York, USA 🏙️</option>
-                <option value="1.3521,103.8198">Singapore 🏙️</option>
-                <option value="22.3193,114.1694">Hong Kong 🏙️</option>
-                <option value="48.8566,2.3522">Paris, France</option>
-                <option value="51.5074,-0.1278">London, UK</option>
-                <option value="35.6762,139.6503">Tokyo, Japan 🏙️</option>
-                <option value="-33.8688,151.2093">Sydney, Australia</option>
-                <option value="41.9028,12.4964">Rome, Italy</option>
-                <option value="55.7558,37.6173">Moscow, Russia</option>
-                <option value="34.0522,-118.2437">Los Angeles, USA</option>
-                <option value="30.0444,31.2357">Cairo, Egypt</option>
-                <option value="52.5200,13.4050">Berlin, Germany</option>
-            </select>
+        <h3>Find Sunny Coffee</h3>
+
+        <div class="btn-row">
+            <button onclick="useMyLocation()" id="location-btn" style="background: #10b981;">My Location</button>
+            <button onclick="toggleLiveSun()" id="sun-toggle">Live Sun</button>
         </div>
-        
-        <button onclick="loadBuildings()">Load Buildings</button>
-        
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="font-size: 12px; margin-bottom: 8px; opacity: 0.7;">Sun Controls</div>
-            <button onclick="toggleLiveSun()" id="sun-toggle">Start Live Sun</button>
-            
-            <div style="margin-top: 10px;">
-                <label style="font-size: 12px; display: block; margin-bottom: 5px;">Time:</label>
-                <input type="time" id="time-input" style="width: 100%; padding: 8px; border-radius: 6px; border: none; background: rgba(0,0,0,0.3); color: white;" onchange="setCustomTime()">
-            </div>
-            
-            <div id="sun-info" style="margin-top: 10px; font-size: 11px; opacity: 0.7;"></div>
-        </div>
-        
+
+        <div id="sun-info"></div>
         <div id="status"></div>
     </div>
 
@@ -109,6 +109,7 @@
     <script src="js/osm-parser.js"></script>
     <script src="js/scene.js"></script>
     <script src="js/sun-manager.js"></script>
+    <script src="js/coffee-manager.js"></script>
 
     <script>
         // Config - make it dynamic!
@@ -119,7 +120,8 @@
         // Initialize scene
         const sceneManager = new SceneManager('scene-container');
         let parser = new OSMParser(LAT, LON);
-        
+        let coffeeManager = new CoffeeManager(parser);
+
         // Initialize sun manager
         let sunManager;
         let liveSunActive = false;
@@ -128,138 +130,155 @@
         setTimeout(() => {
             sunManager = new SunManager(LAT, LON, sceneManager);
             updateSunInfo();
-            
-            // Set current time in input
-            const now = new Date();
-            document.getElementById('time-input').value = 
-                `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         }, 100);
 
-        function changeCity() {
-            const select = document.getElementById('city-select');
-            const coords = select.value.split(',');
-            LAT = parseFloat(coords[0]);
-            LON = parseFloat(coords[1]);
-            
-            // Update parser and sun manager with new coordinates
-            parser = new OSMParser(LAT, LON);
-            
-            // Stop live sun if active
-            if (liveSunActive && sunManager) {
-                sunManager.stopLiveSun();
-                liveSunActive = false;
-                document.getElementById('sun-toggle').textContent = 'Start Live Sun';
+        function useMyLocation() {
+            const statusDiv = document.getElementById('status');
+            const locationBtn = document.getElementById('location-btn');
+
+            if (!navigator.geolocation) {
+                statusDiv.innerHTML = '<p class="error">Geolocation not supported by your browser</p>';
+                return;
             }
-            
-            // Recreate sun manager with new location
-            sunManager = new SunManager(LAT, LON, sceneManager);
-            
-            // Clear existing buildings
-            sceneManager.clearBuildings();
-            
-            // Update sun for new location
-            sunManager.updateSunLight();
-            updateSunInfo();
-            
-            // Show message
-            document.getElementById('status').innerHTML = `<p style="color: #4ade80;">📍 Location changed! Click "Load Buildings" to load new area.</p>`;
-            
-            console.log(`Changed to: ${select.options[select.selectedIndex].text} (${LAT}, ${LON})`);
+
+            locationBtn.textContent = 'Locating...';
+            locationBtn.disabled = true;
+            statusDiv.innerHTML = '<p>Getting your location...</p>';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    LAT = position.coords.latitude;
+                    LON = position.coords.longitude;
+
+                    // Update parser, coffee manager, and sun manager
+                    parser = new OSMParser(LAT, LON);
+                    coffeeManager = new CoffeeManager(parser);
+
+                    // Stop live sun if active
+                    if (liveSunActive && sunManager) {
+                        sunManager.stopLiveSun();
+                        liveSunActive = false;
+                        document.getElementById('sun-toggle').textContent = 'Live Sun';
+                        document.getElementById('sun-toggle').style.background = '#3b82f6';
+                    }
+
+                    sunManager = new SunManager(LAT, LON, sceneManager);
+                    sceneManager.clearBuildings();
+                    sunManager.updateSunLight();
+                    updateSunInfo();
+
+                    locationBtn.textContent = 'My Location';
+                    locationBtn.disabled = false;
+                    statusDiv.innerHTML = `<p class="success">Found you!</p>`;
+
+                    // Auto-load buildings
+                    loadBuildings();
+                },
+                (error) => {
+                    locationBtn.textContent = 'My Location';
+                    locationBtn.disabled = false;
+                    let msg = 'Location error';
+                    if (error.code === 1) msg = 'Permission denied';
+                    if (error.code === 2) msg = 'Location unavailable';
+                    if (error.code === 3) msg = 'Timeout';
+                    statusDiv.innerHTML = `<p class="error">${msg}</p>`;
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
         }
 
         function toggleLiveSun() {
             if (!sunManager) return;
-            
+
             const button = document.getElementById('sun-toggle');
-            
+
             if (liveSunActive) {
                 sunManager.stopLiveSun();
-                button.textContent = 'Start Live Sun';
+                button.textContent = 'Live Sun';
+                button.style.background = '#3b82f6';
                 liveSunActive = false;
             } else {
                 sunManager.startLiveSun();
-                button.textContent = 'Stop Live Sun';
+                button.textContent = 'Sun ON';
+                button.style.background = '#f59e0b';
                 liveSunActive = true;
-                
-                // Update info every second
+
                 setInterval(() => {
-                    if (liveSunActive) updateSunInfo();
+                    if (liveSunActive) updateCoffeeSunStatus();
                 }, 1000);
             }
-        }
 
-        function setCustomTime() {
-            if (!sunManager) return;
-            
-            const timeInput = document.getElementById('time-input').value;
-            const [hours, minutes] = timeInput.split(':').map(Number);
-            
-            // Stop live sun if active
-            if (liveSunActive) {
-                sunManager.stopLiveSun();
-                document.getElementById('sun-toggle').textContent = 'Start Live Sun';
-                liveSunActive = false;
-            }
-            
-            sunManager.setTime(hours, minutes);
-            updateSunInfo();
+            updateCoffeeSunStatus();
         }
 
         function updateSunInfo() {
             if (!sunManager) return;
-            
+
             const times = sunManager.getSunTimes();
             const sunPos = sunManager.getSunPosition();
-            
-            const altitude = (sunPos.altitude * 180 / Math.PI).toFixed(1);
-            const azimuth = (sunPos.azimuth * 180 / Math.PI).toFixed(1);
-            
+            const altitude = (sunPos.altitude * 180 / Math.PI).toFixed(0);
+
+            const sunnyCount = coffeeManager.getSunnyShops().length;
+            const totalCount = coffeeManager.getCoffeeShops().length;
+
             const infoDiv = document.getElementById('sun-info');
-            infoDiv.innerHTML = `
-                Altitude: ${altitude}°<br>
-                Azimuth: ${azimuth}°<br>
-                Sunrise: ${times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}<br>
-                Sunset: ${times.sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}
-            `;
+            if (totalCount > 0) {
+                infoDiv.innerHTML = `Sun: ${altitude}° | ${sunnyCount}/${totalCount} sunny cafes`;
+            } else {
+                infoDiv.innerHTML = `Sun: ${altitude}° | Sunrise ${times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}`;
+            }
+        }
+
+        function updateCoffeeSunStatus() {
+            if (!sunManager || !sceneManager.coffeeMarkers.length) return;
+
+            const sunVector = sunManager.sunPositionToVector(
+                sunManager.getSunPosition().altitude,
+                sunManager.getSunPosition().azimuth
+            );
+
+            sceneManager.updateCoffeeMarkerColors(sunVector);
+            updateSunInfo();
         }
 
         async function loadBuildings() {
             const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = '<p>Loading buildings...</p>';
-
-            // Build Overpass query
-            const query = `
-                [out:json][timeout:25];
-                (
-                  way["building"](around:${RADIUS},${LAT},${LON});
-                  relation["building"](around:${RADIUS},${LAT},${LON});
-                );
-                out body;
-                >;
-                out skel qt;
-            `;
-
-            const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+            statusDiv.innerHTML = '<p>Loading...</p>';
 
             try {
-                const response = await fetch(url);
-                const osmData = await response.json();
-                
-                console.log('Raw OSM data:', osmData);
+                // Load buildings
+                const buildingQuery = `
+                    [out:json][timeout:25];
+                    (
+                      way["building"](around:${RADIUS},${LAT},${LON});
+                      relation["building"](around:${RADIUS},${LAT},${LON});
+                    );
+                    out body;
+                    >;
+                    out skel qt;
+                `;
 
-                // Parse buildings using OSMParser
+                const buildingUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(buildingQuery)}`;
+                const buildingResponse = await fetch(buildingUrl);
+                const osmData = await buildingResponse.json();
+
                 const buildings = parser.parse(osmData);
-                
-                console.log('Parsed buildings:', buildings);
-
-                // Add to scene
                 sceneManager.addBuildings(buildings);
 
-                statusDiv.innerHTML = `<p class="success">✅ Loaded ${buildings.length} buildings!</p>`;
+                // Load coffee shops
+                const coffeeShops = await coffeeManager.fetchCoffeeShops(LAT, LON, RADIUS);
+
+                // Add coffee shop markers
+                sceneManager.addCoffeeMarkers(coffeeShops);
+
+                // Check sun status
+                updateCoffeeSunStatus();
+
+                statusDiv.innerHTML = `<p class="success">${buildings.length} buildings, ${coffeeShops.length} cafes</p>`;
 
             } catch (error) {
                 console.error('Error:', error);
-                statusDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+                statusDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
             }
         }
     </script>
