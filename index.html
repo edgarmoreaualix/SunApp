@@ -47,11 +47,6 @@
             font-size: 18px;
             text-align: center;
         }
-        .btn-row {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
         button {
             background: #3b82f6;
             color: white;
@@ -197,10 +192,7 @@
     <div id="controls">
         <h3>Find Sunny Coffee</h3>
 
-        <div class="btn-row">
-            <button onclick="useMyLocation()" id="location-btn" style="background: #10b981;">My Location</button>
-            <button onclick="toggleLiveSun()" id="sun-toggle">Live Sun</button>
-        </div>
+        <button onclick="useMyLocation()" id="location-btn" style="background: #10b981; margin-bottom: 10px;">My Location</button>
 
         <div id="sun-info"></div>
         <div id="status"></div>
@@ -244,12 +236,13 @@
 
         // Initialize sun manager
         let sunManager;
-        let liveSunActive = false;
 
-        // Initialize sun manager after scene is ready
+        // Initialize sun manager after scene is ready and start live sun
         setTimeout(() => {
             sunManager = new SunManager(LAT, LON, sceneManager);
+            sunManager.startLiveSun();
             updateSunInfo();
+            setInterval(updateCoffeeSunStatus, 1000);
         }, 100);
 
         function useMyLocation() {
@@ -274,15 +267,9 @@
                     parser = new OSMParser(LAT, LON);
                     coffeeManager = new CoffeeManager(parser);
 
-                    // Stop live sun if active
-                    if (liveSunActive && sunManager) {
-                        sunManager.stopLiveSun();
-                        liveSunActive = false;
-                        document.getElementById('sun-toggle').textContent = 'Live Sun';
-                        document.getElementById('sun-toggle').style.background = '#3b82f6';
-                    }
-
+                    if (sunManager) sunManager.stopLiveSun();
                     sunManager = new SunManager(LAT, LON, sceneManager);
+                    sunManager.startLiveSun();
                     sceneManager.clearBuildings();
                     sunManager.updateSunLight();
                     updateSunInfo();
@@ -305,30 +292,6 @@
                 },
                 { enableHighAccuracy: true, timeout: 10000 }
             );
-        }
-
-        function toggleLiveSun() {
-            if (!sunManager) return;
-
-            const button = document.getElementById('sun-toggle');
-
-            if (liveSunActive) {
-                sunManager.stopLiveSun();
-                button.textContent = 'Live Sun';
-                button.style.background = '#3b82f6';
-                liveSunActive = false;
-            } else {
-                sunManager.startLiveSun();
-                button.textContent = 'Sun ON';
-                button.style.background = '#f59e0b';
-                liveSunActive = true;
-
-                setInterval(() => {
-                    if (liveSunActive) updateCoffeeSunStatus();
-                }, 1000);
-            }
-
-            updateCoffeeSunStatus();
         }
 
         function updateSunInfo() {
@@ -488,6 +451,9 @@
 
                 const buildings = parser.parse(osmData);
                 sceneManager.addBuildings(buildings);
+
+                // Load satellite imagery
+                sceneManager.loadSatelliteImagery(LAT, LON, RADIUS);
 
                 // Load coffee shops
                 const coffeeShops = await coffeeManager.fetchCoffeeShops(LAT, LON, RADIUS);

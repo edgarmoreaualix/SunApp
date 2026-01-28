@@ -35,16 +35,16 @@ class SceneManager {
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.container.appendChild(this.renderer.domElement);
 
-        // Ground plane - BIG to catch all shadows
-        const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0xa0d890, // Lighter green for better shadow contrast
+        // Ground plane - will be textured with satellite imagery
+        const groundGeometry = new THREE.PlaneGeometry(3000, 3000);
+        this.groundMaterial = new THREE.MeshStandardMaterial({
+            color: 0x3a5a40,
             roughness: 0.9
         });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        this.scene.add(ground);
+        this.ground = new THREE.Mesh(groundGeometry, this.groundMaterial);
+        this.ground.rotation.x = -Math.PI / 2;
+        this.ground.receiveShadow = true;
+        this.scene.add(this.ground);
 
         // Lights - REDUCED ambient so shadows are visible!
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); // Reduced from 0.4
@@ -84,10 +84,6 @@ class SceneManager {
         this.sunSphere = new THREE.Mesh(sunGeometry, sunMaterial);
         this.sunLight.add(this.sunSphere); // Attach to light so it moves together
         this.scene.add(this.sunLight);
-
-        // Grid helper - bigger grid
-        const gridHelper = new THREE.GridHelper(2000, 100, 0x888888, 0x444444);
-        this.scene.add(gridHelper);
 
         // Mouse controls
         this.setupMouseControls();
@@ -312,5 +308,65 @@ class SceneManager {
     animate() {
         requestAnimationFrame(() => this.animate());
         this.renderer.render(this.scene, this.camera);
+    }
+
+    loadSatelliteImagery(lat, lon, radius) {
+        const zoom = 17;
+        const tileSize = 256;
+        const earthCircumference = 40075016.686;
+        const metersPerPixel = earthCircumference * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom + 8);
+
+        const centerTileX = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+        const centerTileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+
+        const tilesNeeded = Math.ceil(radius * 2 / (tileSize * metersPerPixel)) + 1;
+        const halfTiles = Math.floor(tilesNeeded / 2);
+
+        const canvas = document.createElement('canvas');
+        const canvasSize = tilesNeeded * tileSize;
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+        const ctx = canvas.getContext('2d');
+
+        let loadedCount = 0;
+        const totalTiles = tilesNeeded * tilesNeeded;
+
+        for (let dy = -halfTiles; dy <= halfTiles; dy++) {
+            for (let dx = -halfTiles; dx <= halfTiles; dx++) {
+                const tileX = centerTileX + dx;
+                const tileY = centerTileY + dy;
+
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+
+                const canvasX = (dx + halfTiles) * tileSize;
+                const canvasY = (dy + halfTiles) * tileSize;
+
+                img.onload = () => {
+                    ctx.drawImage(img, canvasX, canvasY, tileSize, tileSize);
+                    loadedCount++;
+
+                    if (loadedCount === totalTiles) {
+                        const texture = new THREE.CanvasTexture(canvas);
+                        texture.minFilter = THREE.LinearFilter;
+                        texture.magFilter = THREE.LinearFilter;
+
+                        this.groundMaterial.map = texture;
+                        this.groundMaterial.color.setHex(0xffffff);
+                        this.groundMaterial.needsUpdate = true;
+
+                        const groundSize = tilesNeeded * tileSize * metersPerPixel;
+                        this.ground.geometry.dispose();
+                        this.ground.geometry = new THREE.PlaneGeometry(groundSize, groundSize);
+                    }
+                };
+
+                img.onerror = () => {
+                    loadedCount++;
+                };
+
+                img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${tileY}/${tileX}`;
+            }
+        }
     }
 }
