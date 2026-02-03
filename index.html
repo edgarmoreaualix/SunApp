@@ -298,7 +298,7 @@
         // ============================================
         // CONFIG - Add your Mapbox token here
         // ============================================
-        const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN_HERE';
+        const MAPBOX_TOKEN = 'pk.eyJ1IjoiYXphcm90NDQiLCJhIjoiY21sNjl0YWhlMGJ2NjNjczg0dDBidzIwdyJ9.i8uo_o1YW_m_tgt1qqPMAA';
         const RADIUS = 1000; // 1km search radius
 
         // ============================================
@@ -319,7 +319,7 @@
         // ============================================
         function init() {
             // Check for Mapbox token
-            if (MAPBOX_TOKEN === 'pk.eyJ1IjoiYXphcm90NDQiLCJhIjoiY21sNjl0YWhlMGJ2NjNjczg0dDBidzIwdyJ9.i8uo_o1YW_m_tgt1qqPMAA') {
+            if (!MAPBOX_TOKEN || MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE') {
                 document.getElementById('status').innerHTML =
                     '<p class="error">Please add your Mapbox token in index.html</p>';
                 return;
