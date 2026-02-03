@@ -75,7 +75,8 @@ class CoffeeManager {
                     address: this.buildAddress(tags),
                     wheelchair: tags.wheelchair || null,
                     isSunny: null,
-                    sunnyAt: null
+                    sunnyAt: null,    // When shaded terrace will get sun
+                    shadesAt: null    // When sunny terrace will become shaded
                 };
             });
 
@@ -129,27 +130,58 @@ class CoffeeManager {
         const sunset = sunManager.getSunTimes().sunset;
 
         this.coffeeShops.forEach(shop => {
-            if (shop.isSunny) {
-                shop.sunnyAt = null;
-                return;
-            }
-
+            // Reset predictions
             shop.sunnyAt = null;
+            shop.shadesAt = null;
 
-            // Check every 15 minutes from now until sunset
-            for (let mins = 15; mins <= 480; mins += 15) {
-                const futureTime = new Date(now.getTime() + mins * 60000);
-                if (futureTime > sunset) break;
+            if (shop.isSunny) {
+                // SUNNY: predict when it will become shaded
+                // Check every 10 minutes from now until sunset
+                for (let mins = 10; mins <= 480; mins += 10) {
+                    const futureTime = new Date(now.getTime() + mins * 60000);
+                    if (futureTime > sunset) {
+                        // Stays sunny until sunset
+                        shop.shadesAt = sunset;
+                        break;
+                    }
 
-                const sunPos = SunCalc.getPosition(futureTime, this.userLat, this.userLon);
-                if (sunPos.altitude <= 0) continue;
+                    const sunPos = SunCalc.getPosition(futureTime, this.userLat, this.userLon);
+                    if (sunPos.altitude <= 0) {
+                        shop.shadesAt = futureTime;
+                        break;
+                    }
 
-                const sunVector = sunManager.sunPositionToVector(sunPos.altitude, sunPos.azimuth);
-                const isSunny = sceneManager.checkSunAtPosition(shop.x, shop.z, sunVector);
+                    const sunDir = sunManager.sunPositionToVector(sunPos.altitude, sunPos.azimuth);
+                    const sunVector = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z).normalize();
+                    const willBeSunny = sceneManager.checkSunAtPosition(shop.x, shop.z, sunVector);
 
-                if (isSunny) {
-                    shop.sunnyAt = futureTime;
-                    break;
+                    if (!willBeSunny) {
+                        shop.shadesAt = futureTime;
+                        break;
+                    }
+                }
+
+                // If we didn't find a shade time, it stays sunny until sunset
+                if (!shop.shadesAt) {
+                    shop.shadesAt = sunset;
+                }
+            } else {
+                // SHADED: predict when it will get sun
+                for (let mins = 15; mins <= 480; mins += 15) {
+                    const futureTime = new Date(now.getTime() + mins * 60000);
+                    if (futureTime > sunset) break;
+
+                    const sunPos = SunCalc.getPosition(futureTime, this.userLat, this.userLon);
+                    if (sunPos.altitude <= 0) continue;
+
+                    const sunDir = sunManager.sunPositionToVector(sunPos.altitude, sunPos.azimuth);
+                    const sunVector = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z).normalize();
+                    const isSunny = sceneManager.checkSunAtPosition(shop.x, shop.z, sunVector);
+
+                    if (isSunny) {
+                        shop.sunnyAt = futureTime;
+                        break;
+                    }
                 }
             }
         });

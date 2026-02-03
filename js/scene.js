@@ -314,26 +314,30 @@ class SceneManager {
         });
     }
 
-    checkSunAtPosition(x, z, sunPosition) {
-        const groundPoint = new THREE.Vector3(x, 1, z);
-        const sunDir = new THREE.Vector3(
-            sunPosition.x - groundPoint.x,
-            sunPosition.y - groundPoint.y,
-            sunPosition.z - groundPoint.z
-        ).normalize();
+    checkSunAtPosition(x, z, sunDirection) {
+        // Check from slightly above ground level (terrace table height ~0.75m)
+        const groundPoint = new THREE.Vector3(x, 0.75, z);
 
-        this.raycaster.set(groundPoint, sunDir);
-        const intersects = this.raycaster.intersectObjects(this.buildingMeshes);
+        // sunDirection should be a normalized THREE.Vector3 pointing TOWARD the sun
+        // We raycast in that direction to see if any building blocks the sun
+        this.raycaster.set(groundPoint, sunDirection);
+        this.raycaster.far = 2000; // Limit raycast distance
+
+        // Check all buildings including their children
+        const intersects = this.raycaster.intersectObjects(this.buildingMeshes, true);
 
         return intersects.length === 0;
     }
 
-    updateCoffeeMarkerColors(sunPosition) {
+    updateCoffeeMarkerColors(sunDirection) {
+        // Convert to THREE.Vector3 and normalize for consistent raycasting
+        const sunDir = new THREE.Vector3(sunDirection.x, sunDirection.y, sunDirection.z).normalize();
+
         this.coffeeMarkers.forEach(marker => {
             const isSunny = this.checkSunAtPosition(
                 marker.position.x,
                 marker.position.z,
-                sunPosition
+                sunDir
             );
 
             marker.userData.shop.isSunny = isSunny;
@@ -353,15 +357,23 @@ class SceneManager {
     }
 
     loadSatelliteImagery(lat, lon, radius) {
-        const zoom = 17;
+        const zoom = 18; // Higher zoom for better alignment
         const tileSize = 256;
         const earthCircumference = 40075016.686;
         const metersPerPixel = earthCircumference * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom + 8);
 
-        const centerTileX = Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
-        const centerTileY = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom));
+        // Calculate fractional tile coordinates for exact position
+        const tileXFloat = (lon + 180) / 360 * Math.pow(2, zoom);
+        const tileYFloat = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom);
 
-        const tilesNeeded = Math.ceil(radius * 2 / (tileSize * metersPerPixel)) + 1;
+        const centerTileX = Math.floor(tileXFloat);
+        const centerTileY = Math.floor(tileYFloat);
+
+        // Calculate sub-tile offset (0-1 range, where user is within the center tile)
+        const subTileOffsetX = tileXFloat - centerTileX; // 0 = left edge, 1 = right edge
+        const subTileOffsetY = tileYFloat - centerTileY; // 0 = top edge, 1 = bottom edge
+
+        const tilesNeeded = Math.ceil(radius * 2 / (tileSize * metersPerPixel)) + 2; // +2 for padding
         const halfTiles = Math.floor(tilesNeeded / 2);
 
         const canvas = document.createElement('canvas');
@@ -400,6 +412,34 @@ class SceneManager {
                         const groundSize = tilesNeeded * tileSize * metersPerPixel;
                         this.ground.geometry.dispose();
                         this.ground.geometry = new THREE.PlaneGeometry(groundSize, groundSize);
+
+                        // Calculate offset to align satellite imagery with buildings
+                        // User is at (0,0,0) in 3D space
+                        // subTileOffset is 0-1 within the center tile (0=left/top, 1=right/bottom)
+                        // Canvas center is at the center of the tile grid (halfTiles + 0.5 tiles from edge)
+                        // User is at (halfTiles + subTileOffsetX) tiles from left edge
+
+                        // How far from canvas center (in tiles) is the user?
+                        const userFromCenterX = subTileOffsetX - 0.5; // -0.5 to +0.5
+                        const userFromCenterY = subTileOffsetY - 0.5; // -0.5 to +0.5
+
+                        // Convert to meters
+                        // Positive X in tiles = East = positive X in 3D
+                        // Positive Y in tiles = South = positive Z in 3D
+                        const offsetXMeters = userFromCenterX * tileSize * metersPerPixel;
+                        const offsetZMeters = userFromCenterY * tileSize * metersPerPixel;
+
+                        // Move ground so that user position aligns with (0,0)
+                        // If user is 50m east of tile center, move ground 50m west (-X)
+                        this.ground.position.set(-offsetXMeters, 0, -offsetZMeters);
+
+                        console.log('Satellite imagery aligned', {
+                            subTileOffset: { x: subTileOffsetX.toFixed(3), y: subTileOffsetY.toFixed(3) },
+                            userFromCenter: { x: userFromCenterX.toFixed(3), y: userFromCenterY.toFixed(3) },
+                            groundOffset: { x: -offsetXMeters.toFixed(1), z: -offsetZMeters.toFixed(1) },
+                            groundSize: groundSize.toFixed(0),
+                            metersPerPixel: metersPerPixel.toFixed(3)
+                        });
                     }
                 };
 

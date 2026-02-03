@@ -22,24 +22,35 @@ class SunManager {
         };
     }
 
-    // Convert sun position to 3D coordinates
-    sunPositionToVector(altitude, azimuth, distance = 1000) {
-        // Convert to Cartesian coordinates
-        // altitude: up/down angle from horizon
-        // azimuth: compass direction (0 = south)
-        
-        const x = distance * Math.cos(altitude) * Math.sin(azimuth);
-        const y = distance * Math.sin(altitude);
-        const z = distance * Math.cos(altitude) * Math.cos(azimuth);
-        
+    // Convert sun position to 3D direction vector (normalized)
+    // Returns direction pointing TOWARD the sun
+    sunPositionToVector(altitude, azimuth) {
+        // Convert to Cartesian direction
+        // altitude: angle above horizon (radians)
+        // azimuth: compass direction (radians, 0 = south)
+
+        const x = Math.cos(altitude) * Math.sin(azimuth);
+        const y = Math.sin(altitude);
+        const z = Math.cos(altitude) * Math.cos(azimuth);
+
         return { x, y, z };
+    }
+
+    // Get sun position at a specific distance (for light placement)
+    sunPositionAtDistance(altitude, azimuth, distance = 1000) {
+        const dir = this.sunPositionToVector(altitude, azimuth);
+        return {
+            x: dir.x * distance,
+            y: dir.y * distance,
+            z: dir.z * distance
+        };
     }
 
     // Update sun light in the scene
     updateSunLight(date = this.currentDate) {
         const sunPos = this.getSunPosition(date);
-        const vector = this.sunPositionToVector(sunPos.altitude, sunPos.azimuth);
-        
+        const vector = this.sunPositionAtDistance(sunPos.altitude, sunPos.azimuth, 1000);
+
         // Update the sun light position
         this.sceneManager.sunLight.position.set(vector.x, vector.y, vector.z);
         
@@ -69,7 +80,7 @@ class SunManager {
     // Get sun times for today
     getSunTimes(date = this.currentDate) {
         const times = SunCalc.getTimes(date, this.lat, this.lon);
-        
+
         return {
             sunrise: times.sunrise,
             sunset: times.sunset,
@@ -77,6 +88,12 @@ class SunManager {
             goldenHour: times.goldenHour,
             goldenHourEnd: times.goldenHourEnd
         };
+    }
+
+    // Check if sun is above horizon (daytime)
+    isDaytime(date = this.currentDate) {
+        const sunPos = this.getSunPosition(date);
+        return sunPos.altitude > 0;
     }
 
     // Set time and update sun

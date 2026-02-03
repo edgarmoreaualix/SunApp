@@ -300,33 +300,64 @@
             const times = sunManager.getSunTimes();
             const sunPos = sunManager.getSunPosition();
             const altitude = (sunPos.altitude * 180 / Math.PI).toFixed(0);
+            const isDay = sunManager.isDaytime();
 
             const sunnyCount = coffeeManager.getSunnyShops().length;
             const totalCount = coffeeManager.getCoffeeShops().length;
 
             const infoDiv = document.getElementById('sun-info');
-            if (totalCount > 0) {
-                infoDiv.innerHTML = `Sun: ${altitude}° | ${sunnyCount}/${totalCount} sunny cafes`;
+            if (!isDay) {
+                // Night time
+                const sunriseTime = times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                infoDiv.innerHTML = `🌙 Night | Sunrise at ${sunriseTime}`;
+            } else if (totalCount > 0) {
+                infoDiv.innerHTML = `☀️ Sun: ${altitude}° | ${sunnyCount}/${totalCount} sunny`;
             } else {
-                infoDiv.innerHTML = `Sun: ${altitude}° | Sunrise ${times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'})}`;
+                const sunsetTime = times.sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                infoDiv.innerHTML = `☀️ Sun: ${altitude}° | Sunset at ${sunsetTime}`;
             }
         }
 
         function updateCoffeeSunStatus() {
             if (!sunManager || !sceneManager.coffeeMarkers.length) return;
 
-            const sunVector = sunManager.sunPositionToVector(
-                sunManager.getSunPosition().altitude,
-                sunManager.getSunPosition().azimuth
-            );
+            // PHYSICS CHECK: If sun is below horizon, all terraces are shaded
+            const isDay = sunManager.isDaytime();
 
-            sceneManager.updateCoffeeMarkerColors(sunVector);
+            if (!isDay) {
+                // Night time - mark all as shaded
+                sceneManager.coffeeMarkers.forEach(marker => {
+                    marker.userData.shop.isSunny = false;
+                    marker.material.color.setHex(0x4a5568);
+                });
+            } else {
+                // Daytime - check shadows via raycasting
+                const sunVector = sunManager.sunPositionToVector(
+                    sunManager.getSunPosition().altitude,
+                    sunManager.getSunPosition().azimuth
+                );
+                sceneManager.updateCoffeeMarkerColors(sunVector);
+            }
+
             coffeeManager.predictSunnyTimes(sunManager, sceneManager);
             updateSunInfo();
             renderCoffeeList();
         }
 
         let selectedShopId = null;
+
+        function formatTimeRemaining(futureDate) {
+            const now = new Date();
+            const diffMs = futureDate - now;
+            const diffMins = Math.round(diffMs / 60000);
+
+            if (diffMins < 60) {
+                return `${diffMins}min`;
+            }
+            const hours = Math.floor(diffMins / 60);
+            const mins = diffMins % 60;
+            return mins > 0 ? `${hours}h${mins}m` : `${hours}h`;
+        }
 
         function renderCoffeeList() {
             const listEl = document.getElementById('coffee-list');
@@ -338,10 +369,21 @@
             }
 
             listEl.innerHTML = shops.map(shop => {
-                let statusText = shop.isSunny ? 'Sunny' : 'Shaded';
-                if (!shop.isSunny && shop.sunnyAt) {
-                    const time = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                    statusText = `Sun at ${time}`;
+                let statusText = '';
+                if (shop.isSunny) {
+                    if (shop.shadesAt) {
+                        const remaining = formatTimeRemaining(shop.shadesAt);
+                        statusText = `☀️ ${remaining} left`;
+                    } else {
+                        statusText = '☀️ Sunny';
+                    }
+                } else {
+                    if (shop.sunnyAt) {
+                        const time = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                        statusText = `Sun at ${time}`;
+                    } else {
+                        statusText = 'Shaded';
+                    }
                 }
                 return `
                 <div class="coffee-item ${shop.id === selectedShopId ? 'selected' : ''}"
@@ -371,12 +413,22 @@
             document.getElementById('detail-name').textContent = shop.name;
 
             let content = '';
-            let sunStatus = shop.isSunny ? '☀️ Currently sunny' : '🌥️ Currently shaded';
-            if (!shop.isSunny && shop.sunnyAt) {
-                const time = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                sunStatus = `🌥️ Shaded now, sunny at ${time}`;
-            } else if (!shop.isSunny) {
-                sunStatus = '🌥️ Shaded until sunset';
+            let sunStatus = '';
+            if (shop.isSunny) {
+                if (shop.shadesAt) {
+                    const remaining = formatTimeRemaining(shop.shadesAt);
+                    const time = shop.shadesAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                    sunStatus = `☀️ Sunny for ${remaining} (until ${time})`;
+                } else {
+                    sunStatus = '☀️ Currently sunny';
+                }
+            } else {
+                if (shop.sunnyAt) {
+                    const time = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                    sunStatus = `🌥️ Shaded now, sunny at ${time}`;
+                } else {
+                    sunStatus = '🌥️ Shaded until sunset';
+                }
             }
             content += `<div class="detail-row">
                 <span class="detail-label">Status</span>
