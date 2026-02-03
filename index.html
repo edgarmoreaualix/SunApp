@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sunny Coffee</title>
+
+    <!-- Mapbox GL JS -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+
     <style>
         * { box-sizing: border-box; }
         body {
@@ -12,9 +17,8 @@
             background: #1a1a1a;
             color: white;
             overflow: hidden;
-            touch-action: none;
         }
-        #scene-container {
+        #map {
             width: 100vw;
             height: 100vh;
         }
@@ -38,7 +42,7 @@
                 right: auto;
                 bottom: auto;
                 max-width: 280px;
-                max-height: none;
+                max-height: calc(100vh - 40px);
                 border-radius: 12px;
             }
         }
@@ -74,6 +78,7 @@
             font-size: 12px;
             opacity: 0.8;
             text-align: center;
+            margin-bottom: 8px;
         }
         .success { color: #4ade80; }
         .error { color: #f87171; }
@@ -184,17 +189,82 @@
                 border-radius: 12px;
             }
         }
+
+        /* Mapbox Markers */
+        .coffee-marker {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .coffee-marker:hover { transform: scale(1.15); }
+        .coffee-marker.sunny {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        }
+        .coffee-marker.shaded {
+            background: linear-gradient(135deg, #64748b, #475569);
+        }
+        .coffee-marker.highlighted {
+            transform: scale(1.3);
+            box-shadow: 0 0 0 3px #3b82f6, 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        /* User Marker */
+        .user-marker {
+            width: 24px;
+            height: 24px;
+            position: relative;
+        }
+        .user-marker-dot {
+            width: 16px;
+            height: 16px;
+            background: #3b82f6;
+            border: 3px solid white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .user-marker-pulse {
+            width: 40px;
+            height: 40px;
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 2s ease-out infinite;
+        }
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+
+        /* Hide Mapbox attribution on mobile for cleaner UI */
+        @media (max-width: 600px) {
+            .mapboxgl-ctrl-bottom-left,
+            .mapboxgl-ctrl-bottom-right {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
-    <div id="scene-container"></div>
-    
+    <div id="map"></div>
+
     <div id="controls">
-        <h3>Find Sunny Coffee</h3>
-
-        <button onclick="useMyLocation()" id="location-btn" style="background: #10b981; margin-bottom: 10px;">My Location</button>
-
+        <h3>Sunny Coffee</h3>
         <div id="sun-info"></div>
+        <button onclick="useMyLocation()" id="location-btn" style="background: #10b981;">Find Sunny Spots</button>
         <div id="status"></div>
         <div id="coffee-list"></div>
     </div>
@@ -211,46 +281,70 @@
         </div>
     </div>
 
-    <!-- Three.js -->
+    <!-- Three.js (for shadow engine only - no rendering) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-    <!-- SunCalc.js for real sun position -->
+
+    <!-- SunCalc.js for sun position -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
-    
-    <!-- Your modules -->
+
+    <!-- App modules -->
     <script src="js/osm-parser.js"></script>
-    <script src="js/scene.js"></script>
+    <script src="js/shadow-engine.js"></script>
+    <script src="js/map-manager.js"></script>
     <script src="js/sun-manager.js"></script>
     <script src="js/coffee-manager.js"></script>
 
     <script>
-        // Config - make it dynamic!
-        let LAT = 47.2184;
+        // ============================================
+        // CONFIG - Add your Mapbox token here
+        // ============================================
+        const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN_HERE';
+        const RADIUS = 1000; // 1km search radius
+
+        // ============================================
+        // GLOBAL STATE
+        // ============================================
+        let LAT = 47.2184;  // Default: Nantes, France
         let LON = -1.5536;
-        const RADIUS = 1000; // 1km radius
+        let parser = null;
+        let shadowEngine = null;
+        let mapManager = null;
+        let sunManager = null;
+        let coffeeManager = null;
+        let selectedShopId = null;
+        let updateInterval = null;
 
-        // Initialize scene
-        const sceneManager = new SceneManager('scene-container');
-        let parser = new OSMParser(LAT, LON);
-        let coffeeManager = new CoffeeManager(parser);
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        function init() {
+            // Check for Mapbox token
+            if (MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE') {
+                document.getElementById('status').innerHTML =
+                    '<p class="error">Please add your Mapbox token in index.html</p>';
+                return;
+            }
 
-        // Initialize sun manager
-        let sunManager;
+            // Initialize shadow engine (headless Three.js)
+            shadowEngine = new ShadowEngine();
 
-        // Initialize sun manager after scene is ready and start live sun
-        setTimeout(() => {
-            sunManager = new SunManager(LAT, LON, sceneManager);
-            sunManager.startLiveSun();
-            updateSunInfo();
-            setInterval(updateCoffeeSunStatus, 1000);
-        }, 100);
+            // Initialize map
+            mapManager = new MapManager('map', MAPBOX_TOKEN);
+            mapManager.init(LAT, LON);
 
+            // Show initial sun info
+            updateSunInfoOnly();
+        }
+
+        // ============================================
+        // LOCATION
+        // ============================================
         function useMyLocation() {
             const statusDiv = document.getElementById('status');
             const locationBtn = document.getElementById('location-btn');
 
             if (!navigator.geolocation) {
-                statusDiv.innerHTML = '<p class="error">Geolocation not supported by your browser</p>';
+                statusDiv.innerHTML = '<p class="error">Geolocation not supported</p>';
                 return;
             }
 
@@ -259,30 +353,38 @@
             statusDiv.innerHTML = '<p>Getting your location...</p>';
 
             navigator.geolocation.getCurrentPosition(
-                (position) => {
+                async (position) => {
                     LAT = position.coords.latitude;
                     LON = position.coords.longitude;
 
-                    // Update parser, coffee manager, and sun manager
+                    // Update parser and managers
                     parser = new OSMParser(LAT, LON);
                     coffeeManager = new CoffeeManager(parser);
 
+                    // Create sun manager with shadow engine
                     if (sunManager) sunManager.stopLiveSun();
-                    sunManager = new SunManager(LAT, LON, sceneManager);
-                    sunManager.startLiveSun();
-                    sceneManager.clearBuildings();
-                    sunManager.updateSunLight();
-                    updateSunInfo();
+                    sunManager = new SunManager(LAT, LON, { sunLight: { position: { set: () => {} }, color: { setHex: () => {} }, intensity: 0 } });
 
-                    locationBtn.textContent = 'My Location';
+                    // Clear and reload
+                    shadowEngine.clearBuildings();
+                    mapManager.clearMarkers();
+
+                    // Center map on user
+                    mapManager.setCenter(LAT, LON);
+                    mapManager.addUserMarker(LAT, LON);
+
+                    locationBtn.textContent = 'Find Sunny Spots';
                     locationBtn.disabled = false;
-                    statusDiv.innerHTML = `<p class="success">Found you!</p>`;
+                    statusDiv.innerHTML = '<p class="success">Found you!</p>';
 
-                    // Auto-load buildings
-                    loadBuildings();
+                    // Load data
+                    await loadData();
+
+                    // Start live updates
+                    startLiveUpdates();
                 },
                 (error) => {
-                    locationBtn.textContent = 'My Location';
+                    locationBtn.textContent = 'Find Sunny Spots';
                     locationBtn.disabled = false;
                     let msg = 'Location error';
                     if (error.code === 1) msg = 'Permission denied';
@@ -294,20 +396,141 @@
             );
         }
 
-        function updateSunInfo() {
-            if (!sunManager) return;
+        // ============================================
+        // DATA LOADING
+        // ============================================
+        async function loadData() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<p>Loading buildings & cafes...</p>';
 
-            const times = sunManager.getSunTimes();
-            const sunPos = sunManager.getSunPosition();
+            try {
+                // Load buildings for shadow calculation
+                const buildingQuery = `
+                    [out:json][timeout:25];
+                    (
+                      way["building"](around:${RADIUS},${LAT},${LON});
+                      relation["building"](around:${RADIUS},${LAT},${LON});
+                    );
+                    out body;
+                    >;
+                    out skel qt;
+                `;
+
+                const buildingUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(buildingQuery)}`;
+                const buildingResponse = await fetch(buildingUrl);
+                const osmData = await buildingResponse.json();
+
+                const buildings = parser.parse(osmData);
+                shadowEngine.addBuildings(buildings);
+
+                // Load coffee shops
+                const coffeeShops = await coffeeManager.fetchCoffeeShops(LAT, LON, RADIUS);
+
+                // Calculate initial sun status
+                updateCoffeeSunStatus();
+
+                // Add markers to map
+                mapManager.addCoffeeMarkers(coffeeShops, selectCoffee);
+
+                // Render list
+                renderCoffeeList();
+
+                statusDiv.innerHTML = `<p class="success">${coffeeShops.length} cafes found</p>`;
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                statusDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // ============================================
+        // SUN & SHADOW UPDATES
+        // ============================================
+        function startLiveUpdates() {
+            if (updateInterval) clearInterval(updateInterval);
+
+            // Update every second
+            updateInterval = setInterval(() => {
+                updateCoffeeSunStatus();
+                renderCoffeeList();
+                mapManager.updateAllMarkers(coffeeManager.getCoffeeShops());
+            }, 1000);
+        }
+
+        function updateCoffeeSunStatus() {
+            if (!sunManager || !coffeeManager) return;
+
+            const shops = coffeeManager.getCoffeeShops();
+            if (shops.length === 0) return;
+
+            // Get current sun position
+            const sunPos = SunCalc.getPosition(new Date(), LAT, LON);
+            const isDay = sunPos.altitude > 0;
+
+            if (!isDay) {
+                // Night - all shaded
+                shops.forEach(shop => {
+                    shop.isSunny = false;
+                });
+            } else {
+                // Day - check shadows via raycasting
+                const sunDir = {
+                    x: Math.cos(sunPos.altitude) * Math.sin(sunPos.azimuth),
+                    y: Math.sin(sunPos.altitude),
+                    z: Math.cos(sunPos.altitude) * Math.cos(sunPos.azimuth)
+                };
+                const sunVector = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z).normalize();
+
+                shops.forEach(shop => {
+                    shop.isSunny = shadowEngine.checkSunAtPosition(shop.x, shop.z, sunVector);
+                });
+            }
+
+            // Predict future sun/shade times
+            coffeeManager.predictSunnyTimes({
+                getSunTimes: () => SunCalc.getTimes(new Date(), LAT, LON),
+                sunPositionToVector: (alt, az) => ({
+                    x: Math.cos(alt) * Math.sin(az),
+                    y: Math.sin(alt),
+                    z: Math.cos(alt) * Math.cos(az)
+                })
+            }, shadowEngine);
+
+            updateSunInfo();
+        }
+
+        function updateSunInfoOnly() {
+            const sunPos = SunCalc.getPosition(new Date(), LAT, LON);
+            const times = SunCalc.getTimes(new Date(), LAT, LON);
             const altitude = (sunPos.altitude * 180 / Math.PI).toFixed(0);
-            const isDay = sunManager.isDaytime();
+            const isDay = sunPos.altitude > 0;
+
+            const infoDiv = document.getElementById('sun-info');
+            if (!isDay) {
+                const sunriseTime = times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                infoDiv.innerHTML = `🌙 Night | Sunrise at ${sunriseTime}`;
+            } else {
+                const sunsetTime = times.sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                infoDiv.innerHTML = `☀️ Sun: ${altitude}° | Sunset at ${sunsetTime}`;
+            }
+        }
+
+        function updateSunInfo() {
+            if (!coffeeManager) {
+                updateSunInfoOnly();
+                return;
+            }
+
+            const sunPos = SunCalc.getPosition(new Date(), LAT, LON);
+            const times = SunCalc.getTimes(new Date(), LAT, LON);
+            const altitude = (sunPos.altitude * 180 / Math.PI).toFixed(0);
+            const isDay = sunPos.altitude > 0;
 
             const sunnyCount = coffeeManager.getSunnyShops().length;
             const totalCount = coffeeManager.getCoffeeShops().length;
 
             const infoDiv = document.getElementById('sun-info');
             if (!isDay) {
-                // Night time
                 const sunriseTime = times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
                 infoDiv.innerHTML = `🌙 Night | Sunrise at ${sunriseTime}`;
             } else if (totalCount > 0) {
@@ -318,34 +541,9 @@
             }
         }
 
-        function updateCoffeeSunStatus() {
-            if (!sunManager || !sceneManager.coffeeMarkers.length) return;
-
-            // PHYSICS CHECK: If sun is below horizon, all terraces are shaded
-            const isDay = sunManager.isDaytime();
-
-            if (!isDay) {
-                // Night time - mark all as shaded
-                sceneManager.coffeeMarkers.forEach(marker => {
-                    marker.userData.shop.isSunny = false;
-                    marker.material.color.setHex(0x4a5568);
-                });
-            } else {
-                // Daytime - check shadows via raycasting
-                const sunVector = sunManager.sunPositionToVector(
-                    sunManager.getSunPosition().altitude,
-                    sunManager.getSunPosition().azimuth
-                );
-                sceneManager.updateCoffeeMarkerColors(sunVector);
-            }
-
-            coffeeManager.predictSunnyTimes(sunManager, sceneManager);
-            updateSunInfo();
-            renderCoffeeList();
-        }
-
-        let selectedShopId = null;
-
+        // ============================================
+        // UI RENDERING
+        // ============================================
         function formatTimeRemaining(futureDate) {
             const now = new Date();
             const diffMs = futureDate - now;
@@ -361,6 +559,11 @@
 
         function renderCoffeeList() {
             const listEl = document.getElementById('coffee-list');
+            if (!coffeeManager) {
+                listEl.innerHTML = '';
+                return;
+            }
+
             const shops = coffeeManager.getShopsSorted();
 
             if (shops.length === 0) {
@@ -387,7 +590,7 @@
                 }
                 return `
                 <div class="coffee-item ${shop.id === selectedShopId ? 'selected' : ''}"
-                     onclick="selectCoffee(${shop.id})">
+                     onclick="selectCoffee(${JSON.stringify(shop).replace(/"/g, '&quot;')})">
                     <div class="coffee-icon ${shop.isSunny ? 'sunny' : 'shaded'}">
                         ${shop.isSunny ? '☀️' : '🌥️'}
                     </div>
@@ -405,26 +608,32 @@
             `}).join('');
         }
 
-        function selectCoffee(id) {
-            selectedShopId = id;
-            const shop = coffeeManager.getShopById(id);
-            if (!shop) return;
+        function selectCoffee(shop) {
+            // Handle both object and event cases
+            if (typeof shop === 'object' && shop.id) {
+                selectedShopId = shop.id;
+            } else {
+                return;
+            }
 
-            document.getElementById('detail-name').textContent = shop.name;
+            const selectedShop = coffeeManager.getShopById(selectedShopId);
+            if (!selectedShop) return;
+
+            document.getElementById('detail-name').textContent = selectedShop.name;
 
             let content = '';
             let sunStatus = '';
-            if (shop.isSunny) {
-                if (shop.shadesAt) {
-                    const remaining = formatTimeRemaining(shop.shadesAt);
-                    const time = shop.shadesAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+            if (selectedShop.isSunny) {
+                if (selectedShop.shadesAt) {
+                    const remaining = formatTimeRemaining(selectedShop.shadesAt);
+                    const time = selectedShop.shadesAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
                     sunStatus = `☀️ Sunny for ${remaining} (until ${time})`;
                 } else {
                     sunStatus = '☀️ Currently sunny';
                 }
             } else {
-                if (shop.sunnyAt) {
-                    const time = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                if (selectedShop.sunnyAt) {
+                    const time = selectedShop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
                     sunStatus = `🌥️ Shaded now, sunny at ${time}`;
                 } else {
                     sunStatus = '🌥️ Shaded until sunset';
@@ -432,53 +641,57 @@
             }
             content += `<div class="detail-row">
                 <span class="detail-label">Status</span>
-                <span class="detail-value ${shop.isSunny ? 'sunny-tag' : 'shaded-tag'}">
+                <span class="detail-value ${selectedShop.isSunny ? 'sunny-tag' : 'shaded-tag'}">
                     ${sunStatus}
                 </span>
             </div>`;
             content += `<div class="detail-row">
                 <span class="detail-label">Distance</span>
-                <span class="detail-value">${shop.distance} meters away</span>
+                <span class="detail-value">${selectedShop.distance} meters away</span>
             </div>`;
-            if (shop.address) {
+            if (selectedShop.address) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Address</span>
-                    <span class="detail-value">${shop.address}</span>
+                    <span class="detail-value">${selectedShop.address}</span>
                 </div>`;
             }
-            if (shop.openingHours) {
+            if (selectedShop.openingHours) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Hours</span>
-                    <span class="detail-value">${shop.openingHours}</span>
+                    <span class="detail-value">${selectedShop.openingHours}</span>
                 </div>`;
             }
-            if (shop.outdoor) {
+            if (selectedShop.outdoor) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Terrace</span>
                     <span class="detail-value">Outdoor seating available</span>
                 </div>`;
             }
-            if (shop.cuisine) {
+            if (selectedShop.cuisine) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Type</span>
-                    <span class="detail-value">${shop.cuisine}</span>
+                    <span class="detail-value">${selectedShop.cuisine}</span>
                 </div>`;
             }
-            if (shop.phone) {
+            if (selectedShop.phone) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Phone</span>
-                    <span class="detail-value"><a href="tel:${shop.phone}" style="color: #60a5fa;">${shop.phone}</a></span>
+                    <span class="detail-value"><a href="tel:${selectedShop.phone}" style="color: #60a5fa;">${selectedShop.phone}</a></span>
                 </div>`;
             }
-            if (shop.website) {
+            if (selectedShop.website) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Website</span>
-                    <span class="detail-value"><a href="${shop.website}" target="_blank" style="color: #60a5fa;">Visit website</a></span>
+                    <span class="detail-value"><a href="${selectedShop.website}" target="_blank" style="color: #60a5fa;">Visit website</a></span>
                 </div>`;
             }
 
             document.getElementById('detail-content').innerHTML = content;
             document.getElementById('coffee-detail').classList.add('open');
+
+            // Highlight on map
+            mapManager.highlightMarker(selectedShopId);
+
             renderCoffeeList();
         }
 
@@ -494,53 +707,10 @@
             window.open(`https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lon}`, '_blank');
         }
 
-        async function loadBuildings() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerHTML = '<p>Loading...</p>';
-
-            try {
-                // Load buildings
-                const buildingQuery = `
-                    [out:json][timeout:25];
-                    (
-                      way["building"](around:${RADIUS},${LAT},${LON});
-                      relation["building"](around:${RADIUS},${LAT},${LON});
-                    );
-                    out body;
-                    >;
-                    out skel qt;
-                `;
-
-                const buildingUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(buildingQuery)}`;
-                const buildingResponse = await fetch(buildingUrl);
-                const osmData = await buildingResponse.json();
-
-                const buildings = parser.parse(osmData);
-                sceneManager.addBuildings(buildings);
-
-                // Add user location marker
-                sceneManager.addUserMarker();
-
-                // Load satellite imagery
-                sceneManager.loadSatelliteImagery(LAT, LON, RADIUS);
-
-                // Load coffee shops
-                const coffeeShops = await coffeeManager.fetchCoffeeShops(LAT, LON, RADIUS);
-
-                // Add coffee shop markers
-                sceneManager.addCoffeeMarkers(coffeeShops);
-
-                // Check sun status and render list
-                updateCoffeeSunStatus();
-                renderCoffeeList();
-
-                statusDiv.innerHTML = `<p class="success">${coffeeShops.length} cafes found</p>`;
-
-            } catch (error) {
-                console.error('Error:', error);
-                statusDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
-            }
-        }
+        // ============================================
+        // START APP
+        // ============================================
+        init();
     </script>
 </body>
 </html>
