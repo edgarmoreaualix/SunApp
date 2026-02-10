@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Terrasse</title>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --sage: #b7c9a8;
+            --sage-light: #dce6d4;
+            --sage-bg: #eef3e9;
+            --terracotta: #c2715e;
+            --terracotta-light: #e8a998;
+            --terracotta-dim: #a05a49;
+            --forest: #2a4a3e;
+            --forest-light: #3d6b58;
+            --cream: #faf7f2;
+            --warm-gray: #9a938a;
+            --text: #3a3530;
+            --card: rgba(255, 255, 255, 0.85);
+            --card-border: rgba(42, 74, 62, 0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--cream);
+            color: var(--text);
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        #map { width: 100vw; height: 100vh; }
+
+        /* ===== SUN ARC WIDGET ===== */
+        .sun-arc {
+            position: fixed;
+            top: max(12px, env(safe-area-inset-top));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 150;
+            background: var(--card);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 24px rgba(42, 74, 62, 0.08), 0 1px 4px rgba(42, 74, 62, 0.04);
+            opacity: 0;
+            animation: floatIn 0.8s 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .sun-arc-visual {
+            width: 48px;
+            height: 28px;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .sun-arc-path {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 24px;
+            border: 2px solid var(--sage);
+            border-bottom: none;
+            border-radius: 24px 24px 0 0;
+        }
+
+        .sun-arc-dot {
+            position: absolute;
+            width: 10px; height: 10px;
+            background: var(--terracotta);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(194, 113, 94, 0.4);
+            transition: all 1s ease;
+        }
+
+        .sun-arc-dot.night {
+            background: var(--warm-gray);
+            box-shadow: 0 0 6px rgba(154, 147, 138, 0.3);
+        }
+
+        .sun-arc-horizon {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--sage);
+        }
+
+        .sun-arc-text {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .sun-arc-text small {
+            display: block;
+            font-size: 11px;
+            color: var(--warm-gray);
+            font-weight: 400;
+            margin-top: 1px;
+        }
+
+        /* ===== BOTTOM SHEET ===== */
+        #controls {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            z-index: 100;
+            background: var(--card);
+            backdrop-filter: blur(30px) saturate(1.4);
+            -webkit-backdrop-filter: blur(30px) saturate(1.4);
+            border: 1px solid var(--card-border);
+            border-bottom: none;
+            border-radius: 28px 28px 0 0;
+            padding-bottom: max(8px, env(safe-area-inset-bottom));
+            max-height: 52vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 -8px 40px rgba(42, 74, 62, 0.06);
+            opacity: 0;
+            animation: sheetUp 0.6s 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        @media (min-width: 600px) {
+            #controls {
+                top: 20px; left: 20px; right: auto; bottom: 20px;
+                max-width: 360px;
+                max-height: none;
+                border-radius: 24px;
+                border: 1px solid var(--card-border);
+            }
+        }
+
+        .handle {
+            width: 32px; height: 4px;
+            background: var(--sage);
+            border-radius: 2px;
+            margin: 10px auto 0;
+            opacity: 0.5;
+            flex-shrink: 0;
+        }
+        @media (min-width: 600px) { .handle { display: none; } }
+
+        .header {
+            padding: 14px 20px 8px;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            font-family: 'Fraunces', serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--forest);
+            letter-spacing: -0.02em;
+            font-optical-sizing: auto;
+        }
+
+        .header-sub {
+            font-size: 13px;
+            color: var(--warm-gray);
+            margin-top: 2px;
+        }
+
+        /* ===== CTA ===== */
+        #location-btn {
+            margin: 8px 20px 10px;
+            padding: 15px 20px;
+            background: var(--forest);
+            color: var(--cream);
+            border: none;
+            border-radius: 16px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+            -webkit-tap-highlight-color: transparent;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        #location-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(183, 201, 168, 0.15) 100%);
+            pointer-events: none;
+        }
+        #location-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(42, 74, 62, 0.2);
+        }
+        #location-btn:active { transform: scale(0.98); }
+        #location-btn:disabled {
+            background: var(--sage-light);
+            color: var(--warm-gray);
+        }
+
+        #status {
+            margin: 0 20px 6px;
+            font-size: 12px;
+            text-align: center;
+            color: var(--warm-gray);
+            flex-shrink: 0;
+        }
+        #status:empty { display: none; }
+        .success { color: var(--forest) !important; }
+        .error { color: var(--terracotta) !important; }
+
+        #sun-info { display: none; }
+
+        /* ===== FILTER BUBBLES ===== */
+        .filters {
+            display: flex;
+            gap: 8px;
+            padding: 4px 20px 12px;
+            flex-shrink: 0;
+        }
+        .filters.hidden { display: none; }
+
+        .filter-bubble {
+            padding: 7px 16px;
+            border-radius: 100px;
+            border: 1.5px solid var(--sage);
+            background: transparent;
+            color: var(--warm-gray);
+            font-family: 'Outfit', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+            -webkit-tap-highlight-color: transparent;
+        }
+        .filter-bubble.active {
+            background: var(--forest);
+            border-color: var(--forest);
+            color: var(--cream);
+        }
+        .filter-bubble:hover:not(.active) {
+            border-color: var(--forest-light);
+            color: var(--forest);
+        }
+
+        /* ===== CAFE LIST ===== */
+        #coffee-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 16px 12px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #coffee-list::-webkit-scrollbar { width: 4px; }
+        #coffee-list::-webkit-scrollbar-track { background: transparent; }
+        #coffee-list::-webkit-scrollbar-thumb {
+            background: var(--sage);
+            border-radius: 2px;
+        }
+
+        .spot-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            border-radius: 18px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+            background: rgba(255, 255, 255, 0.5);
+            border: 1.5px solid transparent;
+        }
+        .spot-card:hover {
+            background: rgba(255, 255, 255, 0.8);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(42, 74, 62, 0.06);
+        }
+        .spot-card:active { transform: scale(0.98); }
+        .spot-card.selected {
+            border-color: var(--forest);
+            background: rgba(183, 201, 168, 0.15);
+        }
+        .spot-card.sunny-card {
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .spot-icon {
+            width: 44px; height: 44px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .spot-icon.sunny {
+            background: linear-gradient(145deg, #f7dca8, #f0c67a);
+            box-shadow: 0 3px 12px rgba(240, 198, 122, 0.25);
+        }
+        .spot-icon.shaded {
+            background: var(--sage-light);
+        }
+
+        .spot-icon.sunny::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 17px;
+            background: linear-gradient(145deg, rgba(240, 198, 122, 0.3), transparent);
+            z-index: -1;
+            animation: warmGlow 3s ease-in-out infinite;
+        }
+        @keyframes warmGlow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .spot-body { flex: 1; min-width: 0; }
+
+        .spot-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .spot-meta {
+            font-size: 12px;
+            color: var(--warm-gray);
+            margin-top: 3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .spot-sun-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-weight: 600;
+        }
+        .spot-sun-badge.sunny { color: var(--terracotta); }
+        .spot-sun-badge.shaded { color: var(--warm-gray); }
+
+        .spot-sep {
+            width: 3px; height: 3px;
+            border-radius: 50%;
+            background: var(--sage);
+        }
+
+        .spot-terrace {
+            font-size: 11px;
+            color: var(--forest-light);
+            font-weight: 500;
+        }
+
+        .spot-dist {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--warm-gray);
+            flex-shrink: 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ===== DETAIL ===== */
+        #coffee-detail {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: var(--cream);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid var(--card-border);
+            border-bottom: none;
+            border-radius: 28px 28px 0 0;
+            padding: 20px 24px;
+            padding-bottom: max(24px, env(safe-area-inset-bottom));
+            z-index: 200;
+            max-height: 65vh;
+            overflow-y: auto;
+            box-shadow: 0 -12px 48px rgba(42, 74, 62, 0.1);
+            transform: translateY(100%);
+            transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        #coffee-detail.open { transform: translateY(0); }
+
+        @media (min-width: 600px) {
+            #coffee-detail {
+                left: auto; right: 20px; bottom: 20px;
+                max-width: 380px;
+                border-radius: 24px;
+                border: 1px solid var(--card-border);
+                transform: translateY(20px);
+                opacity: 0;
+                transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+            }
+            #coffee-detail.open { transform: translateY(0); opacity: 1; }
+        }
+
+        .detail-handle {
+            width: 32px; height: 4px;
+            background: var(--sage);
+            border-radius: 2px;
+            margin: 0 auto 16px;
+            opacity: 0.5;
+        }
+        @media (min-width: 600px) { .detail-handle { display: none; } }
+
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .detail-title {
+            font-family: 'Fraunces', serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--forest);
+            line-height: 1.2;
+            flex: 1;
+            padding-right: 12px;
+        }
+
+        .detail-close {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            background: var(--sage-light);
+            border: none;
+            color: var(--forest);
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            padding: 0;
+        }
+        .detail-close:hover { background: var(--sage); }
+
+        .detail-status-card {
+            padding: 14px 16px;
+            border-radius: 16px;
+            margin-bottom: 18px;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .detail-status-card.sunny {
+            background: linear-gradient(135deg, rgba(240, 198, 122, 0.2), rgba(240, 198, 122, 0.05));
+            border: 1.5px solid rgba(194, 113, 94, 0.15);
+            color: var(--terracotta);
+        }
+        .detail-status-card.shaded {
+            background: rgba(183, 201, 168, 0.15);
+            border: 1.5px solid rgba(183, 201, 168, 0.2);
+            color: var(--warm-gray);
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 12px;
+            padding: 11px 0;
+            border-bottom: 1px solid rgba(42, 74, 62, 0.05);
+            font-size: 14px;
+        }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label {
+            color: var(--warm-gray);
+            min-width: 80px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding-top: 1px;
+        }
+        .detail-value {
+            flex: 1;
+            color: var(--text);
+        }
+        .detail-value a {
+            color: var(--terracotta);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .detail-value a:hover { text-decoration: underline; }
+
+        .detail-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .detail-actions button {
+            flex: 1;
+            padding: 14px;
+            border-radius: 14px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.25s;
+        }
+        .btn-go {
+            background: var(--forest);
+            color: var(--cream);
+        }
+        .btn-go:hover { box-shadow: 0 6px 24px rgba(42, 74, 62, 0.2); }
+        .btn-back {
+            background: var(--sage-light);
+            color: var(--forest);
+        }
+        .btn-back:hover { background: var(--sage); }
+
+        /* ===== MAP MARKERS ===== */
+        .coffee-marker {
+            width: 36px; height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+            border: 2.5px solid white;
+        }
+        .coffee-marker:hover { transform: scale(1.15); }
+        .coffee-marker.sunny {
+            background: linear-gradient(145deg, #f7dca8, #f0c67a);
+            box-shadow: 0 3px 14px rgba(240, 198, 122, 0.35);
+        }
+        .coffee-marker.shaded {
+            background: var(--sage-light);
+            box-shadow: 0 2px 8px rgba(42, 74, 62, 0.12);
+        }
+        .coffee-marker.highlighted {
+            transform: scale(1.3);
+            box-shadow: 0 0 0 3px var(--terracotta), 0 4px 20px rgba(194, 113, 94, 0.3);
+        }
+
+        .user-marker { width: 24px; height: 24px; position: relative; }
+        .user-marker-dot {
+            width: 14px; height: 14px;
+            background: var(--terracotta);
+            border: 3px solid white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(194, 113, 94, 0.35);
+        }
+        .user-marker-pulse {
+            width: 40px; height: 40px;
+            background: rgba(194, 113, 94, 0.2);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            animation: tPulse 2.5s ease-out infinite;
+        }
+        @keyframes tPulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+
+        /* ===== ANIMATIONS ===== */
+        @keyframes floatIn {
+            from { opacity: 0; transform: translateX(-50%) translateY(-16px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes sheetUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .spot-card {
+            opacity: 0;
+            animation: spotFade 0.4s ease-out forwards;
+        }
+        @keyframes spotFade {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Mapbox overrides */
+        .mapboxgl-ctrl-group {
+            border-radius: 14px !important;
+            border: 1.5px solid var(--card-border) !important;
+            box-shadow: 0 2px 12px rgba(42, 74, 62, 0.06) !important;
+            overflow: hidden;
+        }
+        @media (max-width: 600px) {
+            .mapboxgl-ctrl-bottom-left,
+            .mapboxgl-ctrl-bottom-right { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Sun Arc Widget -->
+    <div class="sun-arc">
+        <div class="sun-arc-visual">
+            <div class="sun-arc-path"></div>
+            <div class="sun-arc-horizon"></div>
+            <div class="sun-arc-dot" id="sun-dot"></div>
+        </div>
+        <div class="sun-arc-text">
+            <span id="sun-arc-main"></span>
+            <small id="sun-arc-sub"></small>
+        </div>
+    </div>
+
+    <!-- Bottom Sheet -->
+    <div id="controls">
+        <div class="handle"></div>
+        <div class="header">
+            <div class="header-title">Terrasse</div>
+            <div class="header-sub" id="header-sub">Find your place in the sun</div>
+        </div>
+        <div id="sun-info"></div>
+        <button onclick="useMyLocation()" id="location-btn">Find Sunny Terraces</button>
+        <div id="status"></div>
+        <div class="filters hidden" id="filter-row">
+            <button class="filter-bubble active" onclick="setFilter('all', this)">All spots</button>
+            <button class="filter-bubble" onclick="setFilter('sunny', this)">Sunny</button>
+            <button class="filter-bubble" onclick="setFilter('shaded', this)">Shaded</button>
+        </div>
+        <div id="coffee-list"></div>
+    </div>
+
+    <!-- Detail -->
+    <div id="coffee-detail">
+        <div class="detail-handle"></div>
+        <div class="detail-header">
+            <div class="detail-title" id="detail-name"></div>
+            <button class="detail-close" onclick="closeDetail()">&#215;</button>
+        </div>
+        <div id="detail-content"></div>
+        <div class="detail-actions">
+            <button class="btn-go" onclick="openDirections()">Get Directions</button>
+            <button class="btn-back" onclick="closeDetail()">Back</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+    <script src="js/osm-parser.js"></script>
+    <script src="js/shadow-engine.js"></script>
+    <script src="js/map-manager.js"></script>
+    <script src="js/sun-manager.js"></script>
+    <script src="js/coffee-manager.js"></script>
+
+    <script>
+        const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN_HERE';
+        const RADIUS = 1000;
+        let LAT = 47.2184, LON = -1.5536;
+        let parser = null, shadowEngine = null, mapManager = null, sunManager = null, coffeeManager = null;
+        let selectedShopId = null, updateInterval = null;
+        let currentFilter = 'all';
+
+        function init() {
+            if (!MAPBOX_TOKEN || MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE') {
+                document.getElementById('status').innerHTML = '<p class="error">Add your Mapbox token</p>';
+                return;
+            }
+            shadowEngine = new ShadowEngine();
+            mapManager = new MapManager('map', MAPBOX_TOKEN);
+            mapManager.init(LAT, LON);
+            updateSunInfoOnly();
+        }
+
+        function setFilter(type, el) {
+            currentFilter = type;
+            document.querySelectorAll('.filter-bubble').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            renderCoffeeList();
+        }
+
+        // Position the sun dot on the arc based on current time between sunrise and sunset
+        function updateSunArc() {
+            const now = new Date();
+            const times = SunCalc.getTimes(now, LAT, LON);
+            const sunPos = SunCalc.getPosition(now, LAT, LON);
+            const isDay = sunPos.altitude > 0;
+            const dot = document.getElementById('sun-dot');
+
+            if (isDay) {
+                // Calculate progress through the day (0 = sunrise, 1 = sunset)
+                const dayLength = times.sunset - times.sunrise;
+                const elapsed = now - times.sunrise;
+                let progress = Math.max(0, Math.min(1, elapsed / dayLength));
+
+                // Map to arc position (semicircle from left to right)
+                const angle = Math.PI * (1 - progress); // PI to 0
+                const arcW = 48, arcH = 24;
+                const cx = arcW / 2, cy = arcH;
+                const rx = (arcW - 10) / 2, ry = arcH - 2;
+                const x = cx + rx * Math.cos(angle) - 5;
+                const y = cy - ry * Math.sin(angle) - 5;
+
+                dot.style.left = x + 'px';
+                dot.style.top = y + 'px';
+                dot.classList.remove('night');
+            } else {
+                dot.style.left = '19px';
+                dot.style.top = '20px';
+                dot.classList.add('night');
+            }
+        }
+
+        function useMyLocation() {
+            const statusDiv = document.getElementById('status');
+            const locationBtn = document.getElementById('location-btn');
+            if (!navigator.geolocation) {
+                statusDiv.innerHTML = '<p class="error">Geolocation not supported</p>';
+                return;
+            }
+            locationBtn.textContent = 'Finding you...';
+            locationBtn.disabled = true;
+            statusDiv.innerHTML = '<p>Getting your location...</p>';
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    LAT = position.coords.latitude;
+                    LON = position.coords.longitude;
+                    parser = new OSMParser(LAT, LON);
+                    coffeeManager = new CoffeeManager(parser);
+                    if (sunManager) sunManager.stopLiveSun();
+                    sunManager = new SunManager(LAT, LON, { sunLight: { position: { set: () => {} }, color: { setHex: () => {} }, intensity: 0 } });
+                    shadowEngine.clearBuildings();
+                    mapManager.clearMarkers();
+                    mapManager.setCenter(LAT, LON);
+                    mapManager.addUserMarker(LAT, LON);
+                    locationBtn.textContent = 'Refresh';
+                    locationBtn.disabled = false;
+                    statusDiv.innerHTML = '<p class="success">Found you!</p>';
+                    await loadData();
+                    startLiveUpdates();
+                },
+                (error) => {
+                    locationBtn.textContent = 'Find Sunny Terraces';
+                    locationBtn.disabled = false;
+                    let msg = 'Location error';
+                    if (error.code === 1) msg = 'Permission denied';
+                    if (error.code === 2) msg = 'Unavailable';
+                    if (error.code === 3) msg = 'Timeout';
+                    statusDiv.innerHTML = `<p class="error">${msg}</p>`;
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        }
+
+        async function loadData() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<p>Scanning terraces...</p>';
+            try {
+                const buildingQuery = `[out:json][timeout:25];(way["building"](around:${RADIUS},${LAT},${LON});relation["building"](around:${RADIUS},${LAT},${LON}););out body;>;out skel qt;`;
+                const buildingUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(buildingQuery)}`;
+                const buildingResponse = await fetch(buildingUrl);
+                const osmData = await buildingResponse.json();
+                const buildings = parser.parse(osmData);
+                shadowEngine.addBuildings(buildings);
+                const coffeeShops = await coffeeManager.fetchCoffeeShops(LAT, LON, RADIUS);
+                updateCoffeeSunStatus();
+                mapManager.addCoffeeMarkers(coffeeShops, selectCoffee);
+                renderCoffeeList();
+                document.getElementById('filter-row').classList.remove('hidden');
+                const sunnyCount = coffeeManager.getSunnyShops().length;
+                document.getElementById('header-sub').textContent = `${sunnyCount} sunny of ${coffeeShops.length} spots nearby`;
+                statusDiv.innerHTML = '';
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.innerHTML = `<p class="error">${error.message}</p>`;
+            }
+        }
+
+        function startLiveUpdates() {
+            if (updateInterval) clearInterval(updateInterval);
+            updateInterval = setInterval(() => {
+                updateCoffeeSunStatus();
+                renderCoffeeList();
+                mapManager.updateAllMarkers(coffeeManager.getCoffeeShops());
+                updateSunArc();
+            }, 1000);
+        }
+
+        function updateCoffeeSunStatus() {
+            if (!sunManager || !coffeeManager) return;
+            const shops = coffeeManager.getCoffeeShops();
+            if (shops.length === 0) return;
+            const sunPos = SunCalc.getPosition(new Date(), LAT, LON);
+            const isDay = sunPos.altitude > 0;
+            if (!isDay) {
+                shops.forEach(shop => { shop.isSunny = false; });
+            } else {
+                const sunDir = {
+                    x: Math.cos(sunPos.altitude) * Math.sin(sunPos.azimuth),
+                    y: Math.sin(sunPos.altitude),
+                    z: Math.cos(sunPos.altitude) * Math.cos(sunPos.azimuth)
+                };
+                const sunVector = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z).normalize();
+                shops.forEach(shop => {
+                    shop.isSunny = shadowEngine.checkSunAtPosition(shop.x, shop.z, sunVector);
+                });
+            }
+            coffeeManager.predictSunnyTimes({
+                getSunTimes: () => SunCalc.getTimes(new Date(), LAT, LON),
+                sunPositionToVector: (alt, az) => ({
+                    x: Math.cos(alt) * Math.sin(az),
+                    y: Math.sin(alt),
+                    z: Math.cos(alt) * Math.cos(az)
+                })
+            }, shadowEngine);
+            updateSunInfo();
+        }
+
+        function updateSunInfoOnly() {
+            const sunPos = SunCalc.getPosition(new Date(), LAT, LON);
+            const times = SunCalc.getTimes(new Date(), LAT, LON);
+            const altitude = (sunPos.altitude * 180 / Math.PI).toFixed(0);
+            const isDay = sunPos.altitude > 0;
+            const main = document.getElementById('sun-arc-main');
+            const sub = document.getElementById('sun-arc-sub');
+            if (!isDay) {
+                const t = times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                main.textContent = 'Night time';
+                sub.textContent = `Sunrise at ${t}`;
+            } else {
+                const t = times.sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                main.textContent = `Sun at ${altitude}\u00B0`;
+                sub.textContent = `Sets at ${t}`;
+            }
+            updateSunArc();
+        }
+
+        function updateSunInfo() {
+            if (!coffeeManager) { updateSunInfoOnly(); return; }
+            const sunPos = SunCalc.getPosition(new Date(), LAT, LON);
+            const times = SunCalc.getTimes(new Date(), LAT, LON);
+            const altitude = (sunPos.altitude * 180 / Math.PI).toFixed(0);
+            const isDay = sunPos.altitude > 0;
+            const sunnyCount = coffeeManager.getSunnyShops().length;
+            const totalCount = coffeeManager.getCoffeeShops().length;
+            const main = document.getElementById('sun-arc-main');
+            const sub = document.getElementById('sun-arc-sub');
+            if (!isDay) {
+                const t = times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                main.textContent = 'Night time';
+                sub.textContent = `Sunrise at ${t}`;
+            } else if (totalCount > 0) {
+                main.textContent = `${sunnyCount} sunny`;
+                sub.textContent = `of ${totalCount} \u00B7 ${altitude}\u00B0`;
+                document.getElementById('header-sub').textContent = `${sunnyCount} sunny of ${totalCount} spots nearby`;
+            } else {
+                const t = times.sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                main.textContent = `Sun at ${altitude}\u00B0`;
+                sub.textContent = `Sets at ${t}`;
+            }
+            updateSunArc();
+        }
+
+        function formatTimeRemaining(futureDate) {
+            const diffMins = Math.round((futureDate - new Date()) / 60000);
+            if (diffMins < 60) return `${diffMins}min`;
+            const hours = Math.floor(diffMins / 60);
+            const mins = diffMins % 60;
+            return mins > 0 ? `${hours}h${mins}m` : `${hours}h`;
+        }
+
+        function renderCoffeeList() {
+            const listEl = document.getElementById('coffee-list');
+            if (!coffeeManager) { listEl.innerHTML = ''; return; }
+            let shops = coffeeManager.getShopsSorted();
+            if (currentFilter === 'sunny') shops = shops.filter(s => s.isSunny);
+            if (currentFilter === 'shaded') shops = shops.filter(s => !s.isSunny);
+            if (shops.length === 0) { listEl.innerHTML = ''; return; }
+
+            listEl.innerHTML = shops.map((shop, i) => {
+                let statusText = '';
+                if (shop.isSunny) {
+                    statusText = shop.shadesAt ? `${formatTimeRemaining(shop.shadesAt)} of sun` : 'In the sun';
+                } else {
+                    if (shop.sunnyAt) {
+                        const t = shop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                        statusText = `Sun at ${t}`;
+                    } else {
+                        statusText = 'Shaded today';
+                    }
+                }
+                return `
+                <div class="spot-card ${shop.isSunny ? 'sunny-card' : ''} ${shop.id === selectedShopId ? 'selected' : ''}"
+                     style="animation-delay: ${i * 0.04}s"
+                     onclick="selectCoffee(${JSON.stringify(shop).replace(/"/g, '&quot;')})">
+                    <div class="spot-icon ${shop.isSunny ? 'sunny' : 'shaded'}">
+                        ${shop.isSunny ? '\u2600\uFE0F' : '\uD83C\uDF25\uFE0F'}
+                    </div>
+                    <div class="spot-body">
+                        <div class="spot-name">${shop.name}</div>
+                        <div class="spot-meta">
+                            <span class="spot-sun-badge ${shop.isSunny ? 'sunny' : 'shaded'}">${statusText}</span>
+                            ${shop.outdoor ? '<span class="spot-sep"></span><span class="spot-terrace">Terrace</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="spot-dist">${shop.distance}m</div>
+                </div>`;
+            }).join('');
+        }
+
+        function selectCoffee(shop) {
+            if (typeof shop !== 'object' || !shop.id) return;
+            selectedShopId = shop.id;
+            const s = coffeeManager.getShopById(selectedShopId);
+            if (!s) return;
+
+            document.getElementById('detail-name').textContent = s.name;
+            let content = '';
+
+            let sunStatus = '';
+            if (s.isSunny) {
+                if (s.shadesAt) {
+                    const rem = formatTimeRemaining(s.shadesAt);
+                    const t = s.shadesAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                    sunStatus = `Sunny for ${rem} more (until ${t})`;
+                } else {
+                    sunStatus = 'Basking in sunshine';
+                }
+                content += `<div class="detail-status-card sunny">\u2600\uFE0F ${sunStatus}</div>`;
+            } else {
+                if (s.sunnyAt) {
+                    const t = s.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                    sunStatus = `In shade \u2014 sun arrives at ${t}`;
+                } else {
+                    sunStatus = 'Shaded for the rest of today';
+                }
+                content += `<div class="detail-status-card shaded">\uD83C\uDF25\uFE0F ${sunStatus}</div>`;
+            }
+
+            content += `<div class="detail-row"><span class="detail-label">Distance</span><span class="detail-value">${s.distance}m walk</span></div>`;
+            if (s.address) content += `<div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">${s.address}</span></div>`;
+            if (s.openingHours) content += `<div class="detail-row"><span class="detail-label">Hours</span><span class="detail-value">${s.openingHours}</span></div>`;
+            if (s.outdoor) content += `<div class="detail-row"><span class="detail-label">Terrace</span><span class="detail-value">Outdoor seating available</span></div>`;
+            if (s.cuisine) content += `<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">${s.cuisine}</span></div>`;
+            if (s.phone) content += `<div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value"><a href="tel:${s.phone}">${s.phone}</a></span></div>`;
+            if (s.website) content += `<div class="detail-row"><span class="detail-label">Web</span><span class="detail-value"><a href="${s.website}" target="_blank">Visit website</a></span></div>`;
+
+            document.getElementById('detail-content').innerHTML = content;
+            document.getElementById('coffee-detail').classList.add('open');
+            mapManager.highlightMarker(selectedShopId);
+            renderCoffeeList();
+        }
+
+        function closeDetail() {
+            selectedShopId = null;
+            document.getElementById('coffee-detail').classList.remove('open');
+            renderCoffeeList();
+        }
+
+        function openDirections() {
+            const shop = coffeeManager.getShopById(selectedShopId);
+            if (!shop) return;
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lon}`, '_blank');
+        }
+
+        init();
+    </script>
+</body>
+</html>
