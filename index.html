@@ -9,252 +9,619 @@
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
 
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+
     <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #1a1a1a;
-            color: white;
-            overflow: hidden;
+        :root {
+            --peach: #FCCAB0;
+            --coral: #F4845F;
+            --coral-deep: #E8614D;
+            --blush: #FDE8E0;
+            --golden: #F5C16C;
+            --golden-warm: #EDAA3B;
+            --honey: #C8913B;
+            --cream: #FFF8F2;
+            --sand: #F0E6DA;
+            --warm-gray: #8E8078;
+            --warm-dark: #3D2E26;
+            --warm-darker: #2A1F1A;
+            --panel-bg: rgba(255, 248, 242, 0.92);
+            --panel-bg-solid: #FFF8F2;
+            --shadow-soft: 0 4px 24px rgba(61, 46, 38, 0.10);
+            --shadow-medium: 0 8px 32px rgba(61, 46, 38, 0.14);
+            --shadow-lifted: 0 12px 40px rgba(61, 46, 38, 0.18);
+            --radius-sm: 12px;
+            --radius-md: 18px;
+            --radius-lg: 26px;
+            --radius-xl: 32px;
         }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--cream);
+            color: var(--warm-dark);
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
         #map {
             width: 100vw;
             height: 100vh;
         }
+
+        /* ======================== */
+        /* BOTTOM SHEET / CONTROLS  */
+        /* ======================== */
         #controls {
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(30, 41, 59, 0.98);
-            padding: 16px;
-            padding-bottom: max(16px, env(safe-area-inset-bottom));
-            border-radius: 20px 20px 0 0;
+            background: var(--panel-bg);
+            backdrop-filter: blur(40px) saturate(1.6);
+            -webkit-backdrop-filter: blur(40px) saturate(1.6);
+            padding: 0 20px 20px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
             z-index: 100;
-            max-height: 40vh;
+            max-height: 45vh;
             overflow-y: auto;
+            box-shadow: 0 -4px 40px rgba(61, 46, 38, 0.10);
+            border-top: 1px solid rgba(245, 193, 108, 0.25);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
         }
+
+        #controls::-webkit-scrollbar { width: 0; }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* Drag handle */
+        #controls::before {
+            content: '';
+            display: block;
+            width: 36px;
+            height: 4px;
+            background: var(--peach);
+            border-radius: 4px;
+            margin: 12px auto 16px;
+            opacity: 0.7;
+        }
+
         @media (min-width: 600px) {
             #controls {
                 top: 20px;
                 left: 20px;
                 right: auto;
                 bottom: auto;
-                max-width: 280px;
+                max-width: 320px;
                 max-height: calc(100vh - 40px);
-                border-radius: 12px;
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow-medium);
+                border-top: none;
+                border: 1px solid rgba(245, 193, 108, 0.2);
+                animation: fadeSlideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
             }
+            #controls::before { display: none; }
         }
-        h3 {
-            margin: 0 0 12px 0;
-            font-size: 18px;
+
+        @keyframes fadeSlideIn {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* ======================== */
+        /* HEADER / BRAND           */
+        /* ======================== */
+        .app-header {
             text-align: center;
+            margin-bottom: 14px;
         }
-        button {
-            background: #3b82f6;
+
+        .app-title {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 26px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--coral) 0%, var(--golden-warm) 60%, var(--honey) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .app-tagline {
+            font-size: 11.5px;
+            font-weight: 400;
+            color: var(--warm-gray);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        /* ======================== */
+        /* SUN INFO PILL            */
+        /* ======================== */
+        #sun-info {
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--warm-dark);
+            text-align: center;
+            margin-bottom: 12px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(245, 193, 108, 0.15), rgba(252, 202, 176, 0.15));
+            border-radius: 100px;
+            border: 1px solid rgba(245, 193, 108, 0.2);
+            letter-spacing: 0.01em;
+        }
+
+        /* ======================== */
+        /* MAIN BUTTON              */
+        /* ======================== */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--coral) 0%, var(--coral-deep) 100%);
             color: white;
             border: none;
-            padding: 14px 16px;
-            border-radius: 10px;
+            padding: 15px 20px;
+            border-radius: var(--radius-md);
             cursor: pointer;
+            font-family: 'Outfit', sans-serif;
             font-size: 15px;
-            width: 100%;
             font-weight: 500;
+            width: 100%;
+            letter-spacing: 0.02em;
             -webkit-tap-highlight-color: transparent;
+            box-shadow: 0 4px 16px rgba(244, 132, 95, 0.3);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
         }
-        button:hover { background: #2563eb; }
-        button:active { background: #1d4ed8; transform: scale(0.98); }
-        button:disabled { background: #64748b; }
+
+        .btn-primary::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 24px rgba(244, 132, 95, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.97) translateY(0);
+            box-shadow: 0 2px 8px rgba(244, 132, 95, 0.25);
+        }
+
+        .btn-primary:disabled {
+            background: var(--sand);
+            color: var(--warm-gray);
+            box-shadow: none;
+        }
+
+        /* ======================== */
+        /* STATUS                   */
+        /* ======================== */
         #status {
             margin-top: 10px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
             font-size: 13px;
             text-align: center;
+            font-weight: 400;
         }
-        #sun-info {
-            font-size: 12px;
-            opacity: 0.8;
-            text-align: center;
-            margin-bottom: 8px;
-        }
-        .success { color: #4ade80; }
-        .error { color: #f87171; }
 
-        /* Coffee List */
+        #status:empty { display: none; }
+
+        .success { color: var(--coral); font-weight: 500; }
+        .error { color: #D94F4F; font-weight: 500; }
+
+        /* ======================== */
+        /* COFFEE LIST              */
+        /* ======================== */
         #coffee-list {
-            margin-top: 12px;
+            margin-top: 14px;
             max-height: 50vh;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
+
+        #coffee-list::-webkit-scrollbar { width: 0; }
+
         .coffee-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            margin-bottom: 8px;
+            padding: 12px 14px;
+            background: white;
+            border-radius: var(--radius-md);
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            border: 1px solid rgba(240, 230, 218, 0.6);
+            position: relative;
+            overflow: hidden;
         }
-        .coffee-item:hover { background: rgba(0, 0, 0, 0.5); }
-        .coffee-item.selected { background: rgba(59, 130, 246, 0.3); }
+
+        .coffee-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            background: linear-gradient(135deg, rgba(252, 202, 176, 0.15), rgba(245, 193, 108, 0.08));
+            transition: opacity 0.25s ease;
+        }
+
+        .coffee-item:hover {
+            border-color: rgba(252, 202, 176, 0.5);
+            box-shadow: var(--shadow-soft);
+            transform: translateY(-1px);
+        }
+
+        .coffee-item:hover::before { opacity: 1; }
+
+        .coffee-item:active {
+            transform: scale(0.98);
+            box-shadow: none;
+        }
+
+        .coffee-item.selected {
+            border-color: var(--peach);
+            box-shadow: 0 0 0 2px rgba(252, 202, 176, 0.3), var(--shadow-soft);
+        }
+
+        .coffee-item.selected::before { opacity: 1; }
+
         .coffee-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
+            width: 42px;
+            height: 42px;
+            border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 18px;
             flex-shrink: 0;
+            position: relative;
+            z-index: 1;
         }
-        .coffee-icon.sunny { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
-        .coffee-icon.shaded { background: linear-gradient(135deg, #64748b, #475569); }
-        .coffee-info { flex: 1; min-width: 0; }
+
+        .coffee-icon.sunny {
+            background: linear-gradient(140deg, var(--golden), var(--golden-warm));
+            box-shadow: 0 3px 10px rgba(245, 193, 108, 0.35);
+        }
+
+        .coffee-icon.shaded {
+            background: linear-gradient(140deg, var(--sand), #E4D8CC);
+        }
+
+        .coffee-info {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            z-index: 1;
+        }
+
         .coffee-name {
-            font-weight: 600;
+            font-weight: 500;
             font-size: 14px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            color: var(--warm-dark);
+            letter-spacing: -0.01em;
         }
+
         .coffee-meta {
             font-size: 12px;
-            opacity: 0.7;
-            margin-top: 2px;
+            margin-top: 3px;
+            font-weight: 400;
         }
+
         .coffee-distance {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
             white-space: nowrap;
+            color: var(--warm-gray);
+            position: relative;
+            z-index: 1;
+            background: var(--blush);
+            padding: 4px 10px;
+            border-radius: 100px;
         }
-        .sunny-tag { color: #fbbf24; }
-        .shaded-tag { color: #94a3b8; }
 
-        /* Detail Panel */
+        .sunny-tag { color: var(--golden-warm); font-weight: 500; }
+        .shaded-tag { color: var(--warm-gray); }
+
+        /* ======================== */
+        /* DETAIL PANEL             */
+        /* ======================== */
         #coffee-detail {
             display: none;
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(30, 41, 59, 0.98);
-            padding: 20px;
-            padding-bottom: max(20px, env(safe-area-inset-bottom));
-            border-radius: 20px 20px 0 0;
+            background: var(--panel-bg);
+            backdrop-filter: blur(40px) saturate(1.6);
+            -webkit-backdrop-filter: blur(40px) saturate(1.6);
+            padding: 0 24px 24px;
+            padding-bottom: max(24px, env(safe-area-inset-bottom));
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
             z-index: 200;
-            max-height: 60vh;
+            max-height: 65vh;
             overflow-y: auto;
+            box-shadow: 0 -8px 48px rgba(61, 46, 38, 0.14);
+            border-top: 1px solid rgba(245, 193, 108, 0.25);
         }
-        #coffee-detail.open { display: block; }
+
+        #coffee-detail::-webkit-scrollbar { width: 0; }
+
+        #coffee-detail::before {
+            content: '';
+            display: block;
+            width: 36px;
+            height: 4px;
+            background: var(--peach);
+            border-radius: 4px;
+            margin: 12px auto 18px;
+            opacity: 0.6;
+        }
+
+        #coffee-detail.open {
+            display: block;
+            animation: detailSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        @keyframes detailSlideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
         .detail-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 16px;
+            align-items: center;
+            margin-bottom: 18px;
         }
-        .detail-title { font-size: 20px; font-weight: 600; }
+
+        .detail-title {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--warm-dark);
+            letter-spacing: -0.02em;
+            flex: 1;
+            padding-right: 12px;
+        }
+
         .detail-close {
-            width: 32px;
-            height: 32px;
+            width: 34px;
+            height: 34px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.1);
-            border: none;
-            color: white;
-            font-size: 18px;
+            background: var(--blush);
+            border: 1px solid rgba(240, 230, 218, 0.5);
+            color: var(--warm-gray);
+            font-size: 17px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
             padding: 0;
+            font-family: 'Outfit', sans-serif;
         }
+
+        .detail-close:hover {
+            background: var(--peach);
+            color: var(--warm-dark);
+        }
+
         .detail-row {
             display: flex;
-            gap: 8px;
-            margin-bottom: 10px;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            padding: 10px 14px;
+            background: white;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(240, 230, 218, 0.4);
+            align-items: center;
+        }
+
+        .detail-label {
+            color: var(--warm-gray);
+            min-width: 72px;
+            font-size: 11.5px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .detail-value {
+            flex: 1;
+            font-weight: 400;
+            color: var(--warm-dark);
+        }
+
+        .detail-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .detail-actions .btn-primary {
+            padding: 13px 16px;
             font-size: 14px;
         }
-        .detail-label { opacity: 0.6; min-width: 80px; }
-        .detail-value { flex: 1; }
-        .detail-actions { margin-top: 16px; display: flex; gap: 10px; }
-        .detail-actions button { padding: 12px; font-size: 14px; }
+
+        .btn-secondary {
+            background: white;
+            color: var(--warm-dark);
+            border: 1.5px solid var(--sand);
+            padding: 13px 16px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
+            width: 100%;
+            letter-spacing: 0.01em;
+            -webkit-tap-highlight-color: transparent;
+            transition: all 0.25s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--peach);
+            background: var(--blush);
+        }
+
+        .btn-secondary:active {
+            transform: scale(0.97);
+        }
+
         @media (min-width: 600px) {
             #coffee-detail {
                 left: auto;
                 right: 20px;
                 bottom: 20px;
-                max-width: 340px;
-                border-radius: 12px;
+                max-width: 360px;
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow-lifted);
+                border-top: none;
+                border: 1px solid rgba(245, 193, 108, 0.2);
             }
+            #coffee-detail::before { display: none; }
         }
 
-        /* Mapbox Markers */
+        /* ======================== */
+        /* MAP MARKERS              */
+        /* ======================== */
         .coffee-marker {
-            width: 36px;
-            height: 36px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
-        }
-        .coffee-marker:hover { transform: scale(1.15); }
-        .coffee-marker.sunny {
-            background: linear-gradient(135deg, #fbbf24, #f59e0b);
-        }
-        .coffee-marker.shaded {
-            background: linear-gradient(135deg, #64748b, #475569);
-        }
-        .coffee-marker.highlighted {
-            transform: scale(1.3);
-            box-shadow: 0 0 0 3px #3b82f6, 0 4px 12px rgba(0,0,0,0.4);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            border: 2.5px solid white;
         }
 
-        /* User Marker */
+        .coffee-marker:hover {
+            transform: scale(1.2);
+        }
+
+        .coffee-marker.sunny {
+            background: linear-gradient(140deg, var(--golden), var(--golden-warm));
+            box-shadow: 0 3px 12px rgba(245, 193, 108, 0.45), 0 0 0 0 rgba(245, 193, 108, 0);
+            animation: sunnyGlow 2.5s ease-in-out infinite;
+        }
+
+        @keyframes sunnyGlow {
+            0%, 100% { box-shadow: 0 3px 12px rgba(245, 193, 108, 0.45), 0 0 0 0 rgba(245, 193, 108, 0.15); }
+            50% { box-shadow: 0 3px 12px rgba(245, 193, 108, 0.45), 0 0 0 6px rgba(245, 193, 108, 0); }
+        }
+
+        .coffee-marker.shaded {
+            background: linear-gradient(140deg, #E4D8CC, #D4C8BC);
+            box-shadow: 0 2px 8px rgba(61, 46, 38, 0.15);
+        }
+
+        .coffee-marker.highlighted {
+            transform: scale(1.35);
+            box-shadow: 0 0 0 3px var(--coral), 0 6px 20px rgba(244, 132, 95, 0.35);
+            animation: none;
+        }
+
+        /* ======================== */
+        /* USER MARKER              */
+        /* ======================== */
         .user-marker {
             width: 24px;
             height: 24px;
             position: relative;
         }
+
         .user-marker-dot {
-            width: 16px;
-            height: 16px;
-            background: #3b82f6;
-            border: 3px solid white;
+            width: 14px;
+            height: 14px;
+            background: var(--coral);
+            border: 2.5px solid white;
             border-radius: 50%;
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-        .user-marker-pulse {
-            width: 40px;
-            height: 40px;
-            background: rgba(59, 130, 246, 0.3);
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            animation: pulse 2s ease-out infinite;
-        }
-        @keyframes pulse {
-            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
-            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+            box-shadow: 0 2px 8px rgba(244, 132, 95, 0.4);
         }
 
-        /* Hide Mapbox attribution on mobile for cleaner UI */
+        .user-marker-pulse {
+            width: 36px;
+            height: 36px;
+            background: rgba(244, 132, 95, 0.2);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: userPulse 2.2s ease-out infinite;
+        }
+
+        @keyframes userPulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+        }
+
+        /* ======================== */
+        /* MAPBOX OVERRIDES         */
+        /* ======================== */
+        .mapboxgl-ctrl-group {
+            border-radius: var(--radius-sm) !important;
+            box-shadow: var(--shadow-soft) !important;
+            border: 1px solid rgba(240, 230, 218, 0.5) !important;
+            overflow: hidden;
+        }
+
+        .mapboxgl-ctrl-group button {
+            width: 38px !important;
+            height: 38px !important;
+        }
+
         @media (max-width: 600px) {
             .mapboxgl-ctrl-bottom-left,
             .mapboxgl-ctrl-bottom-right {
                 display: none;
             }
+        }
+
+        /* ======================== */
+        /* LOADING SHIMMER          */
+        /* ======================== */
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .loading-shimmer {
+            background: linear-gradient(90deg, var(--sand) 25%, var(--blush) 50%, var(--sand) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+            border-radius: var(--radius-sm);
+            height: 52px;
+            margin-bottom: 8px;
         }
     </style>
 </head>
@@ -262,9 +629,12 @@
     <div id="map"></div>
 
     <div id="controls">
-        <h3>Sunny Coffee</h3>
+        <div class="app-header">
+            <div class="app-title">Sunny Coffee</div>
+            <div class="app-tagline">find your golden spot</div>
+        </div>
         <div id="sun-info"></div>
-        <button onclick="useMyLocation()" id="location-btn" style="background: #10b981;">Find Sunny Spots</button>
+        <button class="btn-primary" onclick="useMyLocation()" id="location-btn">Find Sunny Spots</button>
         <div id="status"></div>
         <div id="coffee-list"></div>
     </div>
@@ -276,8 +646,8 @@
         </div>
         <div id="detail-content"></div>
         <div class="detail-actions">
-            <button onclick="openDirections()" style="background: #10b981;">Directions</button>
-            <button onclick="closeDetail()">Close</button>
+            <button class="btn-primary" onclick="openDirections()">Directions</button>
+            <button class="btn-secondary" onclick="closeDetail()">Close</button>
         </div>
     </div>
 
@@ -403,6 +773,10 @@
             const statusDiv = document.getElementById('status');
             statusDiv.innerHTML = '<p>Loading buildings & cafes...</p>';
 
+            // Show loading shimmer in coffee list
+            const listEl = document.getElementById('coffee-list');
+            listEl.innerHTML = '<div class="loading-shimmer"></div><div class="loading-shimmer"></div><div class="loading-shimmer"></div>';
+
             try {
                 // Load buildings for shadow calculation
                 const buildingQuery = `
@@ -508,10 +882,10 @@
             const infoDiv = document.getElementById('sun-info');
             if (!isDay) {
                 const sunriseTime = times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                infoDiv.innerHTML = `🌙 Night | Sunrise at ${sunriseTime}`;
+                infoDiv.innerHTML = `Sunrise at ${sunriseTime}`;
             } else {
                 const sunsetTime = times.sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                infoDiv.innerHTML = `☀️ Sun: ${altitude}° | Sunset at ${sunsetTime}`;
+                infoDiv.innerHTML = `${altitude}° above horizon &middot; Sunset ${sunsetTime}`;
             }
         }
 
@@ -532,12 +906,12 @@
             const infoDiv = document.getElementById('sun-info');
             if (!isDay) {
                 const sunriseTime = times.sunrise.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                infoDiv.innerHTML = `🌙 Night | Sunrise at ${sunriseTime}`;
+                infoDiv.innerHTML = `Sunrise at ${sunriseTime}`;
             } else if (totalCount > 0) {
-                infoDiv.innerHTML = `☀️ Sun: ${altitude}° | ${sunnyCount}/${totalCount} sunny`;
+                infoDiv.innerHTML = `${altitude}° &middot; <strong>${sunnyCount}</strong> of ${totalCount} in the sun`;
             } else {
                 const sunsetTime = times.sunset.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                infoDiv.innerHTML = `☀️ Sun: ${altitude}° | Sunset at ${sunsetTime}`;
+                infoDiv.innerHTML = `${altitude}° above horizon &middot; Sunset ${sunsetTime}`;
             }
         }
 
@@ -571,14 +945,14 @@
                 return;
             }
 
-            listEl.innerHTML = shops.map(shop => {
+            listEl.innerHTML = shops.map((shop, i) => {
                 let statusText = '';
                 if (shop.isSunny) {
                     if (shop.shadesAt) {
                         const remaining = formatTimeRemaining(shop.shadesAt);
-                        statusText = `☀️ ${remaining} left`;
+                        statusText = `${remaining} of sun left`;
                     } else {
-                        statusText = '☀️ Sunny';
+                        statusText = 'Sunny now';
                     }
                 } else {
                     if (shop.sunnyAt) {
@@ -590,9 +964,10 @@
                 }
                 return `
                 <div class="coffee-item ${shop.id === selectedShopId ? 'selected' : ''}"
-                     onclick="selectCoffee(${JSON.stringify(shop).replace(/"/g, '&quot;')})">
+                     onclick="selectCoffee(${JSON.stringify(shop).replace(/"/g, '&quot;')})"
+                     style="animation: fadeInItem 0.35s ${i * 0.04}s cubic-bezier(0.16,1,0.3,1) both">
                     <div class="coffee-icon ${shop.isSunny ? 'sunny' : 'shaded'}">
-                        ${shop.isSunny ? '☀️' : '🌥️'}
+                        ${shop.isSunny ? '&#9728;' : '&#9729;'}
                     </div>
                     <div class="coffee-info">
                         <div class="coffee-name">${shop.name}</div>
@@ -600,13 +975,23 @@
                             <span class="${shop.isSunny ? 'sunny-tag' : 'shaded-tag'}">
                                 ${statusText}
                             </span>
-                            ${shop.outdoor ? ' · Terrace' : ''}
+                            ${shop.outdoor ? ' &middot; Terrace' : ''}
                         </div>
                     </div>
                     <div class="coffee-distance">${shop.distance}m</div>
                 </div>
             `}).join('');
         }
+
+        // Inject staggered animation keyframes
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+            @keyframes fadeInItem {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        `;
+        document.head.appendChild(styleSheet);
 
         function selectCoffee(shop) {
             // Handle both object and event cases
@@ -627,16 +1012,16 @@
                 if (selectedShop.shadesAt) {
                     const remaining = formatTimeRemaining(selectedShop.shadesAt);
                     const time = selectedShop.shadesAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                    sunStatus = `☀️ Sunny for ${remaining} (until ${time})`;
+                    sunStatus = `Sunny for ${remaining} (until ${time})`;
                 } else {
-                    sunStatus = '☀️ Currently sunny';
+                    sunStatus = 'Currently sunny';
                 }
             } else {
                 if (selectedShop.sunnyAt) {
                     const time = selectedShop.sunnyAt.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
-                    sunStatus = `🌥️ Shaded now, sunny at ${time}`;
+                    sunStatus = `Shaded now, sunny at ${time}`;
                 } else {
-                    sunStatus = '🌥️ Shaded until sunset';
+                    sunStatus = 'Shaded until sunset';
                 }
             }
             content += `<div class="detail-row">
@@ -676,13 +1061,13 @@
             if (selectedShop.phone) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Phone</span>
-                    <span class="detail-value"><a href="tel:${selectedShop.phone}" style="color: #60a5fa;">${selectedShop.phone}</a></span>
+                    <span class="detail-value"><a href="tel:${selectedShop.phone}" style="color: var(--coral); text-decoration: none; font-weight: 500;">${selectedShop.phone}</a></span>
                 </div>`;
             }
             if (selectedShop.website) {
                 content += `<div class="detail-row">
                     <span class="detail-label">Website</span>
-                    <span class="detail-value"><a href="${selectedShop.website}" target="_blank" style="color: #60a5fa;">Visit website</a></span>
+                    <span class="detail-value"><a href="${selectedShop.website}" target="_blank" style="color: var(--coral); text-decoration: none; font-weight: 500;">Visit website</a></span>
                 </div>`;
             }
 
