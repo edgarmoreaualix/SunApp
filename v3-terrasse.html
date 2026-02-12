@@ -665,6 +665,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+    <script src="config.js"></script>
     <script src="js/osm-parser.js"></script>
     <script src="js/shadow-engine.js"></script>
     <script src="js/map-manager.js"></script>
@@ -672,7 +673,7 @@
     <script src="js/coffee-manager.js"></script>
 
     <script>
-        const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN_HERE';
+        // MAPBOX_TOKEN is loaded from config.js (gitignored)
         const RADIUS = 1000;
         let LAT = 47.2184, LON = -1.5536;
         let parser = null, shadowEngine = null, mapManager = null, sunManager = null, coffeeManager = null;
